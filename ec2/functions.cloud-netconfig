@@ -18,6 +18,7 @@
 
 API_VERSION="2016-09-02"
 METADATA_URL_BASE="http://169.254.169.254/${API_VERSION}/meta-data/network/interfaces/macs/"
+CURL="$CURL -m 3"
 
 # -------------------------------------------------------------------
 # get IPv4 address from the EC2 meta data server and return them
@@ -28,7 +29,7 @@ get_ipv4_addresses_from_metadata()
     test -z "$hwaddr" && return 1
 
     # sometimes the entry for a newly attach NIC is not there yet
-    local check_md=$(curl "${METADATA_URL_BASE}" 2>/dev/null | grep "$hwaddr")
+    local check_md=$($CURL "${METADATA_URL_BASE}" 2>/dev/null | grep "$hwaddr")
     local attempts=0
     while [ -z "$check_md" ]; do
         if [ $attempts -ge 5 ]; then
@@ -37,12 +38,12 @@ get_ipv4_addresses_from_metadata()
         fi
         attempts=$((attempts+1))
         sleep 1
-        check_md=$(curl "${METADATA_URL_BASE}" 2>/dev/null | grep "$hwaddr")
+        check_md=$($CURL "${METADATA_URL_BASE}" 2>/dev/null | grep "$hwaddr")
     done
 
-    local cidr_block=$(curl "${METADATA_URL_BASE}/$hwaddr/subnet-ipv4-cidr-block" 2>/dev/null)
+    local cidr_block=$($CURL "${METADATA_URL_BASE}/$hwaddr/subnet-ipv4-cidr-block" 2>/dev/null)
     prefixlen=${cidr_block##*/}
-    curl "${METADATA_URL_BASE}/$hwaddr/local-ipv4s" 2>/dev/null | \
+    $CURL "${METADATA_URL_BASE}/$hwaddr/local-ipv4s" 2>/dev/null | \
     while read -r addr || [[ -n "$addr" ]]; do
         [[ $count -ge 1 ]] && echo -n " "
         echo -n "${addr}/${prefixlen}"
@@ -55,7 +56,7 @@ get_ipv4_addresses_from_metadata()
 # 
 metadata_available()
 {   
-    local resp=$(curl "http://169.254.169.254/latest/meta-data/" 2>/dev/null)
+    local resp=$($CURL "http://169.254.169.254/latest/meta-data/" 2>/dev/null)
     [[ "$resp" == *ami-id* ]]
     return $?
 }

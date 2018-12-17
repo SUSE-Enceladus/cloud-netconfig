@@ -32,7 +32,7 @@ ExclusiveArch:  do-not-build
 %endif
 
 Name:           %{base_name}%{flavor_suffix}
-Version:        0.7
+Version:        0.8
 Release:        0
 License:        GPL-3.0+
 Summary:        Network configuration scripts for %{csp_string}

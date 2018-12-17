@@ -18,7 +18,7 @@
 %define base_name cloud-netconfig
 
 Name:           %{base_name}-azure
-Version:        0.7
+Version:        0.8
 Release:        0
 License:        GPL-3.0+
 Summary:        Network configuration scripts for Microsoft Azure
