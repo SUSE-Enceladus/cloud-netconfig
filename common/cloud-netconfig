@@ -282,6 +282,7 @@ manage_interfaceconfig()
         return
     fi
     for cfg in ${1}/* ; do
+        test -f $cfg || continue
         get_variable "SERVICE" "$cfg"
         case "$SERVICE" in
         "wicked-dhcp-ipv4"|"dhcpcd")
