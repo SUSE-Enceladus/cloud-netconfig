@@ -151,21 +151,14 @@ configure_interface_ipv4()
         log "removing address $addr from interface $INTERFACE"
         ip -4 addr del $addr dev $INTERFACE
 
-        # drop routing policy rule (no policies for eth0)
-        if [[ "$INTERFACE" != "eth0" ]] ; then
-            ip -4 rule del from ${addr%/*}
-        fi
+        # drop routing policy rule
+        ip -4 rule del from ${addr%/*}
     done
     for addr in ${addr_to_add[@]} ; do
         # add new IP address
         log "adding address $addr to interface $INTERFACE"
         ip -4 addr add $addr broadcast $BROADCAST dev $INTERFACE
     done
-
-    if [[ "$INTERFACE" == "eth0" ]]; then
-        # no routing policies needed for primary interface
-        return
-    fi
 
     # To make a working default route for secondary interfaces, we
     # need a separate route table so we can send packets there
