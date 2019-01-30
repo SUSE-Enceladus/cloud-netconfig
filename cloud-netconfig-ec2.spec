@@ -18,7 +18,7 @@
 %define base_name cloud-netconfig
 
 Name:           %{base_name}-ec2
-Version:        0.8
+Version:        0.9
 Release:        0
 License:        GPL-3.0+
 Summary:        Network configuration scripts for Amazon EC2
@@ -40,6 +40,7 @@ Requires:       udev
 Requires:       curl
 Provides:       cloud-netconfig
 Conflicts:      cloud-netconfig
+%{?systemd_requires}
 
 %description
 This package contains scripts for automatically configuring network interfaces
@@ -55,7 +56,8 @@ make install-ec2 \
   DESTDIR=%{buildroot} \
   PREFIX=%{_usr} \
   SYSCONFDIR=%{_sysconfdir} \
-  UDEVRULESDIR=%{_udevrulesdir}
+  UDEVRULESDIR=%{_udevrulesdir} \
+  UNITDIR=%{_unitdir}
 
 # Disable persistent net generator from udev-persistent-ifnames as
 # it does not work for xen interfaces. This will likely produce a warning.
@@ -73,6 +75,19 @@ ln -s /dev/null %{buildroot}/%{_sysconfdir}/udev/rules.d/75-persistent-net-gener
 %endif
 %{_udevrulesdir}/51-cloud-netconfig-hotplug.rules
 %{_udevrulesdir}/75-cloud-persistent-net-generator.rules
-%doc README.md LICENSE
+%doc README.md
+%license LICENSE
+
+%pre
+%service_add_pre %{base_name}.service %{base_name}.timer
+
+%post
+%service_add_post %{base_name}.service %{base_name}.timer
+
+%preun
+%service_del_preun %{base_name}.service %{base_name}.timer
+
+%postun
+%service_del_postun %{base_name}.service %{base_name}.timer
 
 %changelog
