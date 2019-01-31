@@ -1,0 +1,6 @@
+[Unit]
+Description=Update cloud-netconfig Setup
+
+[Service]
+Type=oneshot
+ExecStart=-/bin/bash -c '/sbin/netconfig -m cloud-netconfig update'
