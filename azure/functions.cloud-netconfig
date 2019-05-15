@@ -21,6 +21,29 @@ URL_HDR="Metadata:true"
 URL_APX='?format=text&api-version=2017-04-02'
 CURL="curl -m 3 -H $URL_HDR"
 
+
+# -------------------------------------------------------------------
+# look up a meta data item
+#
+get_from_metadata()
+{
+    local url="${METADATA_BASE_URL}${1}${URL_APX}"
+    local result=$($CURL $url 2>/dev/null)
+    local count=0
+
+    while [[ $result == "Too many requests" ]]; do
+        count=$((count+1))
+        if [[ $count -gt 10 ]]; then
+            return
+        fi
+        sleep 0.5
+        result=$($CURL $url 2>/dev/null)
+    done
+
+    echo -n $result
+}
+
+
 # -------------------------------------------------------------------
 # get the MAC address from the metadata server
 # format is uppercase without semicolons
@@ -30,7 +53,7 @@ get_iface_mac()
     local if_idx="$1"
     test -z "$if_idx" && return
 
-    $CURL "${METADATA_BASE_URL}${if_idx}/macAddress${URL_APX}" 2>/dev/null
+    get_from_metadata "${if_idx}/macAddress"
 }
 
 # -------------------------------------------------------------------
@@ -42,12 +65,11 @@ get_ipv4_addresses_by_index()
     local if_idx="$1" count=0 prefixlen="$2"
     test -z "$if_idx" && return
 
-    $CURL "${METADATA_BASE_URL}${if_idx}/ipv4/ipAddress/${URL_APX}" 2>/dev/null | \
-    while read idx || [[ -n "$idx" ]] ; do
+    for idx in `get_from_metadata "${if_idx}/ipv4/ipAddress"` ; do
         [[ $count -ge 1 ]] && echo -n " "
-        $CURL "${METADATA_BASE_URL}${if_idx}/ipv4/ipAddress/${idx}/privateIpAddress${URL_APX}" 2>/dev/null
+        get_from_metadata "${if_idx}/ipv4/ipAddress/${idx}/privateIpAddress"
         echo -n "/"
-        $CURL "${METADATA_BASE_URL}${if_idx}/ipv4/subnet/0/prefix${URL_APX}" 2>/dev/null
+        get_from_metadata "${if_idx}/ipv4/subnet/0/prefix"
         count=$((count+1))
     done
 }
@@ -62,7 +84,7 @@ get_ipv4_addresses_from_metadata()
 
     local oldopt=$(shopt -p nocasematch)
     shopt -s nocasematch
-    $CURL "${METADATA_BASE_URL}${URL_APX}" 2>/dev/null | \
+    get_from_metadata | \
     while read idx || [[ -n "$idx" ]] ; do
         if [[ "$(get_iface_mac $idx)" == "${hwaddr//:/}" ]]; then
             get_ipv4_addresses_by_index $idx
