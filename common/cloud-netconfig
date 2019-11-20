@@ -239,6 +239,11 @@ configure_interface_ipv4()
         add_addr_to_log $INTERFACE $addr
     done
 
+    # If we have a single NIC configuration, skip routing policies
+    if [[ $SINGLE_NIC = yes ]]; then
+       return
+    fi
+
     # To make a working default route for secondary interfaces, we
     # need a separate route table so we can send packets there
     # using routing policy. Check whether the table is there and
@@ -367,7 +372,20 @@ manage_interfaceconfig()
     done
 }
 
-for IFDIR in $STATEDIR/* ; do 
+if_dirs=()
+for IFDIR in $STATEDIR/* ; do
     test -d $IFDIR -a -d "/sys/class/net/${IFDIR##*/}" || continue
+    test ${IFDIR##*/} = "lo" && continue
+    if_dirs+=($IFDIR)
+done
+
+# set single NIC flag if appropriate
+if [[ ${#if_dirs[@]} -eq 1 ]]; then
+    SINGLE_NIC=yes
+else
+    SINGLE_NIC=no
+fi
+
+for IFDIR in ${if_dirs[@]} ; do
     manage_interfaceconfig $IFDIR
 done
