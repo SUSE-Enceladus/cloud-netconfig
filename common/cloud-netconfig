@@ -168,8 +168,8 @@ configure_interface_ipv4()
         local GW GWS=()
         # we simply take the first gateway in case there is more than one
         eval GWS=\(${GATEWAYS}\)
-        if [[ -n "${GW[0]}" ]]; then
-            GW="${GW[0]}"
+        if [[ -n "${GWS[0]}" ]]; then
+            GW="${GWS[0]}"
         else
             # no default route, guess one
             # FIXME: this is not ideal; make it at least configurable
