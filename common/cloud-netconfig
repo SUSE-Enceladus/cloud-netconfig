@@ -27,6 +27,7 @@ r="$ROOT"
 . "$r/etc/sysconfig/network/scripts/functions.cloud-netconfig"
 
 STATEDIR=/var/run/netconfig
+ADDRDIR=/var/run/netconfig/cloud
 
 # -------------------------------------------------------------------
 # return all IPv4 addresses currently configured on given interface
@@ -77,6 +78,21 @@ get_extra_elements()
 }
 
 # -------------------------------------------------------------------
+# check wether $2 is an element of array $1
+#
+is_element()
+{
+    local array=(${!1}) item=${2}
+    local elem
+    for elem in ${array[@]} ; do
+        if [[ $elem == $item ]]; then
+            return 0
+        fi
+    done
+    return 1
+}
+
+# -------------------------------------------------------------------
 # look up a free priority with a given prefix from the rule table
 # 
 get_free_priority()
@@ -108,6 +124,58 @@ get_free_priority()
 }
 
 # -------------------------------------------------------------------
+# get IPv4 addresses from log dir
+#
+get_cn_assigned_addrs()
+{
+    local iface="$1"
+    test -z "$iface" && return 1
+
+    if [[ -e ${ADDRDIR}/${iface} ]]; then
+        echo $(cat ${ADDRDIR}/${iface})
+    fi
+}
+
+# -------------------------------------------------------------------
+# add address to log
+#
+add_addr_to_log()
+{
+    local iface="$1"
+    local addr="$2"
+
+    test -z "$iface" -o -z "$addr" && return 1
+    addr_log_file="${ADDRDIR}/${iface}"
+    if [[ -e ${addr_log_file} ]]; then
+        grep -q -x "${addr}" "${addr_log_file}" || echo "${addr}" >> "${addr_log_file}"
+    else
+        mkdir -p "${ADDRDIR}"
+        echo "${addr}" > "${addr_log_file}"
+    fi
+}
+
+# -------------------------------------------------------------------
+# remove address from log
+#
+remove_addr_from_log()
+{
+    local iface="$1"
+    local addr="$2"
+
+    test -z "$iface" -o -z "$addr" && return 1
+    addr_log_file="${ADDRDIR}/${iface}"
+    if [[ -e ${addr_log_file} ]]; then
+        addr_log_file_tmp=$(mktemp ${ADDRDIR}/${iface}.XXXXXXXX)
+        if [ $? -ne 0 ]; then
+            log "could not create temp file, not removing address from log"
+        else
+            grep -v -x "${addr}" "${addr_log_file}" >> "${addr_log_file_tmp}"
+            mv "${addr_log_file_tmp}" "${addr_log_file}"
+        fi
+    fi
+}
+
+# -------------------------------------------------------------------
 # configure interface with secondary IPv4 addresses configured in the
 # cloud framework and set up routing policies
 # 
@@ -132,11 +200,14 @@ configure_interface_ipv4()
     # get differences
     local addr_to_remove=($(get_extra_elements laddrs[@] raddrs[@]))
     local addr_to_add=($(get_extra_elements raddrs[@] laddrs[@]))
-    
+
+    # get addresses cloud-netconfig configured
+    local addr_cn=($(get_cn_assigned_addrs $INTERFACE))
+
     debug "active IPv4 addresses on $INTERFACE: ${laddrs[@]}"
-    debug "configured IPv4 addresses on $INTERFACE: ${raddrs[@]}"
-    debug "addresses to remove on $INTERFACE: ${addr_to_remove[@]}"
-    debug "addresses to add on $INTERFACE: ${addr_to_add[@]}"
+    debug "configured IPv4 addresses for $INTERFACE: ${raddrs[@]}"
+    debug "excess addresses on $INTERFACE: ${addr_to_remove[@]}"
+    debug "addresses to configure on $INTERFACE: ${addr_to_add[@]}"
 
     local addr priority
     for addr in ${addr_to_remove[@]} ; do
@@ -147,17 +218,25 @@ configure_interface_ipv4()
             continue
         fi
 
-        # remove old IP address
-        log "removing address $addr from interface $INTERFACE"
-        ip -4 addr del $addr dev $INTERFACE
+        if is_element addr_cn[@] ${addr} ; then
+            # remove old IP address
+            log "removing address $addr from interface $INTERFACE"
+            ip -4 addr del $addr dev $INTERFACE
 
-        # drop routing policy rule
-        ip -4 rule del from ${addr%/*}
+            # drop routing policy rule
+            ip -4 rule del from ${addr%/*}
+
+            # remove from address log
+            remove_addr_from_log $INTERFACE $addr
+        else
+            debug "not removing address ${addr} (was not added by cloud-netconfig)"
+        fi
     done
     for addr in ${addr_to_add[@]} ; do
         # add new IP address
         log "adding address $addr to interface $INTERFACE"
         ip -4 addr add $addr broadcast $BROADCAST dev $INTERFACE
+        add_addr_to_log $INTERFACE $addr
     done
 
     # To make a working default route for secondary interfaces, we
