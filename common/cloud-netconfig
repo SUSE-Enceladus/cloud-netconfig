@@ -27,7 +27,7 @@ r="$ROOT"
 . "$r/etc/sysconfig/network/scripts/functions.cloud-netconfig"
 
 STATEDIR=/var/run/netconfig
-ADDRDIR=/var/run/cloud-netconfig
+ADDRDIR=/var/run/netconfig/cloud
 
 # -------------------------------------------------------------------
 # return all IPv4 addresses currently configured on given interface
