@@ -86,7 +86,6 @@ get_ipv4_addresses_from_metadata()
     shopt -s nocasematch
     get_from_metadata | \
     for idx in $(get_from_metadata) ; do
-        echo "checking $idx" >&2
         if [[ "$(get_iface_mac ${idx%/*})" == "${hwaddr//:/}" ]]; then
             get_ipv4_addresses_by_index ${idx%/*}
         fi
