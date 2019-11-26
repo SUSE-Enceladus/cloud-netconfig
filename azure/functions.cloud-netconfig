@@ -67,7 +67,7 @@ get_ipv4_addresses_by_index()
 
     for idx in `get_from_metadata "${if_idx}/ipv4/ipAddress"` ; do
         [[ $count -ge 1 ]] && echo -n " "
-        get_from_metadata "${if_idx}/ipv4/ipAddress/${idx}/privateIpAddress"
+        get_from_metadata "${if_idx}/ipv4/ipAddress/${idx}privateIpAddress"
         echo -n "/"
         get_from_metadata "${if_idx}/ipv4/subnet/0/prefix"
         count=$((count+1))
@@ -85,9 +85,10 @@ get_ipv4_addresses_from_metadata()
     local oldopt=$(shopt -p nocasematch)
     shopt -s nocasematch
     get_from_metadata | \
-    while read idx || [[ -n "$idx" ]] ; do
-        if [[ "$(get_iface_mac $idx)" == "${hwaddr//:/}" ]]; then
-            get_ipv4_addresses_by_index $idx
+    for idx in $(get_from_metadata) ; do
+        echo "checking $idx" >&2
+        if [[ "$(get_iface_mac ${idx%/*})" == "${hwaddr//:/}" ]]; then
+            get_ipv4_addresses_by_index ${idx%/*}
         fi
     done
     eval "$oldopt"
