@@ -56,6 +56,7 @@ tarball:
 		--warning=no-file-changed \
 		--exclude cloud-netconfig-$(verSrc)/cloud-netconfig-$(verSrc) \
 		--exclude cloud-netconfig-$(verSrc)/cloud-netconfig-$(verSrc).tar.bz2 \
+		--exclude .git \
 		cloud-netconfig-$(verSrc)
 	@rm -f cloud-netconfig-$(verSrc)
 	@ls -l cloud-netconfig-$(verSrc).tar.bz2
