@@ -182,18 +182,30 @@ remove_addr_from_log()
 update_routing_table()
 {
     local rtable="$1"
+    local iface="$2"
 
     test -z "$rtable" && return 1
 
     # copy routes from default table
-    ip route show all | grep -v "^default" | while read route ; do
-        ip route replace $route table $rtable
-    done
+    for ipv in "-4" "-6" ; do
+        ip $ipv route show | grep -v "^default" | while read route ; do
+            ip $ipv route replace $route table $rtable
+        done
 
-    # check if there are any leftover routes and delete them
-    ip route show all table $rtable | grep -v "^default" | while read route ; do
-        ip_out="$(ip route show $route)"
-        test -z "$ip_out" && ip route del $route table $rtable
+        # Do a second run with routes specific to the interface being configured.
+        # This makes sure that in case there are competing routes (same destination
+        # but different device), the one matching the right interface is selected.
+        # This situation can happen in case there are multiple interfaces that are
+        # connected to the same subnet.
+        ip $ipv route show dev "$iface" | grep -v "^default" | while read route ; do
+            ip $ipv route replace $route dev "$iface" table $rtable
+        done
+
+        # check if there are any leftover routes and delete them
+        ip $ipv route show all table $rtable | grep -v "^default" | while read route ; do
+            ip_out="$(ip $ipv route show $route)"
+            test -z "$ip_out" && ip $ipv route del $route table $rtable
+        done
     done
 }
 
@@ -286,7 +298,7 @@ configure_interface_ipv4()
     fi
 
     # copy specific routes from the default routing table
-    update_routing_table $RTABLE
+    update_routing_table $RTABLE $INTERFACE
 
     # update routing policies so connections from addresses on
     # secondary interfaces are routed via those
