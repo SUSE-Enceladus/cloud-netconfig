@@ -38,7 +38,7 @@ common:
 	mkdir -p $(DEST_DEFAULTDIR)
 	install -m 755 common/cloud-netconfig $(DEST_NETCONFDIR)
 	install -m 755 common/cloud-netconfig-cleanup $(DEST_SCRIPTDIR)
-	install -m 755 common/cloud-netconfig-default $(DEST_DEFAULTDIR)/cloud-netconfig
+	install -m 644 common/cloud-netconfig-default $(DEST_DEFAULTDIR)/cloud-netconfig
 	install -m 755 common/cloud-netconfig-hotplug $(DEST_SCRIPTDIR)
 	install -m 644 systemd/cloud-netconfig.service $(DEST_UNITDIR)
 	install -m 644 systemd/cloud-netconfig.timer $(DEST_UNITDIR)
