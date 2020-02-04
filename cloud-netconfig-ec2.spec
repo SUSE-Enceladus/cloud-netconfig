@@ -68,6 +68,7 @@ ln -s /dev/null %{buildroot}/%{_sysconfdir}/udev/rules.d/75-persistent-net-gener
 
 %files
 %defattr(-,root,root)
+%config(noreplace) %{_sysconfdir}/default/cloud-netconfig
 %{_sysconfdir}/netconfig.d/cloud-netconfig
 %{_sysconfdir}/sysconfig/network/scripts/*
 %if 0%{?suse_version} >= 1315
