@@ -21,6 +21,9 @@
 test -z "$INTERFACE" && exit 1
 test "$INTERFACE" == "eth0" && exit 0
 
+test -f /etc/default/cloud-netconfig && . /etc/default/cloud-netconfig
+test -z "$CLOUD_NETCONFIG_MANAGE" && CLOUD_NETCONFIG_MANAGE=yes
+
 get_network_service()
 {
     if type -p systemctl >/dev/null ; then
@@ -53,7 +56,7 @@ STARTMODE="hotplug"
 BOOTPROTO="dhcp"
 DHCLIENT_SET_DEFAULT_ROUTE="yes"
 DHCLIENT_ROUTE_PRIORITY="10${INTERFACE#eth}00"
-CLOUD_NETCONFIG_MANAGE="yes"
+CLOUD_NETCONFIG_MANAGE="$CLOUD_NETCONFIG_MANAGE"
 POST_DOWN_SCRIPT="${SCRIPT_PREFIX}cloud-netconfig-cleanup"
 EOF
 }
