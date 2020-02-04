@@ -20,7 +20,7 @@
 Name:           %{base_name}-ec2
 Version:        1.4
 Release:        0
-License:        GPL-3.0+
+License:        GPL-3.0-or-later
 Summary:        Network configuration scripts for Amazon EC2
 Url:            https://github.com/SUSE/Enceladus
 Group:          System/Management
@@ -35,7 +35,7 @@ Requires:       sysconfig
 BuildRequires:  sysconfig-netconfig
 Requires:       sysconfig-netconfig
 %endif
-BuildRequires:  udev
+BuildRequires:  pkgconfig(udev)
 Requires:       udev
 Requires:       curl
 Provides:       cloud-netconfig

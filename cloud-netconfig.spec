@@ -34,7 +34,7 @@ ExclusiveArch:  do-not-build
 Name:           %{base_name}%{flavor_suffix}
 Version:        1.4
 Release:        0
-License:        GPL-3.0+
+License:        GPL-3.0-or-later
 Summary:        Network configuration scripts for %{csp_string}
 Url:            https://github.com/SUSE-Enceladus/cloud-netconfig
 Group:          System/Management
@@ -49,7 +49,7 @@ Requires:       sysconfig
 BuildRequires:  sysconfig-netconfig
 Requires:       sysconfig-netconfig
 %endif
-BuildRequires:  udev
+BuildRequires:  pkgconfig(udev)
 Requires:       udev
 Requires:       curl
 %if 0%{?sles_version} == 11
