@@ -1,0 +1,2 @@
+# Default value cloud-netconfig should use when creating new ifcfg files
+CLOUD_NETCONFIG_MANAGE="yes"

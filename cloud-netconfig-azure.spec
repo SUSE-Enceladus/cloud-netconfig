@@ -20,7 +20,7 @@
 Name:           %{base_name}-azure
 Version:        1.4
 Release:        0
-License:        GPL-3.0+
+License:        GPL-3.0-or-later
 Summary:        Network configuration scripts for Microsoft Azure
 Url:            https://github.com/SUSE/Enceladus
 Group:          System/Management
@@ -35,7 +35,7 @@ Requires:       sysconfig
 BuildRequires:  sysconfig-netconfig
 Requires:       sysconfig-netconfig
 %endif
-BuildRequires:  udev
+BuildRequires:  pkgconfig(udev)
 Requires:       udev
 Requires:       curl
 Provides:       cloud-netconfig
@@ -68,6 +68,7 @@ ln -s /dev/null %{buildroot}/%{_sysconfdir}/udev/rules.d/75-persistent-net-gener
 
 %files
 %defattr(-,root,root)
+%config(noreplace) %{_sysconfdir}/default/cloud-netconfig
 %{_sysconfdir}/netconfig.d/cloud-netconfig
 %{_sysconfdir}/sysconfig/network/scripts/*
 %if 0%{?suse_version} >= 1315
