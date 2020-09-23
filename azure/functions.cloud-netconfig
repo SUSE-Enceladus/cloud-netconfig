@@ -84,7 +84,6 @@ get_ipv4_addresses_from_metadata()
 
     local oldopt=$(shopt -p nocasematch)
     shopt -s nocasematch
-    get_from_metadata | \
     for idx in $(get_from_metadata) ; do
         if [[ "$(get_iface_mac ${idx%/*})" == "${hwaddr//:/}" ]]; then
             get_ipv4_addresses_by_index ${idx%/*}
