@@ -15,14 +15,10 @@ DEST_DEFAULTDIR=$(DESTDIR)$(DEFAULTDIR)
 
 
 verSrc = $(shell cat VERSION)
-verSpecEC2 = $(shell rpm -q --specfile --qf '%{VERSION}' cloud-netconfig-ec2.spec)
-verSpecAz = $(shell rpm -q --specfile --qf '%{VERSION}' cloud-netconfig-azure.spec)
+verSpec = $(shell rpm -q --specfile --qf '%{VERSION}' cloud-netconfig.spec 2>/dev/null)
 
-ifneq "$(verSrc)" "$(verSpecEC2)"
-$(error "Version mismatch source and EC2 spec, aborting")
-endif
-ifneq "$(verSrc)" "$(verSpecAz)"
-$(error "Version mismatch source and Azure spec, aborting")
+ifneq "$(verSrc)" "$(verSpec)"
+$(error "Version mismatch source and spec, aborting")
 endif
 
 help:
