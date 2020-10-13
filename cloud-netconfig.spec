@@ -30,9 +30,13 @@ ExclusiveArch:  do-not-build
 %define flavor_suffix -ec2
 %define csp_string Amazon EC2
 %endif
+%if "@BUILD_FLAVOR@" == "gce"
+%define flavor_suffix -gce
+%define csp_string Google Compute Engine
+%endif
 
 Name:           %{base_name}%{flavor_suffix}
-Version:        1.4
+Version:        1.5
 Release:        0
 License:        GPL-3.0-or-later
 Summary:        Network configuration scripts for %{csp_string}

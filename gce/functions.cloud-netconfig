@@ -1,0 +1,45 @@
+#!/bin/bash
+
+# Copyright (c) 2020 SUSE LLC, All rights reserved.
+#
+# This file is part of cloud-netconfig.
+#
+# cloud-netconfig is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# cloud-netconfig is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+
+# -------------------------------------------------------------------
+# no metadata lookup in GCE required due to no secondary IP addresses
+# simply look up local addresses
+#
+get_ipv4_addresses_from_metadata()
+{
+    local iface status mac if_match addr hwaddr="$1"
+    test -z "$hwaddr" && return 1
+    while read -r iface status mac rest ; do
+        if [[ $mac == $hwaddr ]]; then
+            if_match=$iface
+            break
+        fi
+    done < <(ip -br -o -4 link show)
+    if [[ -n $if_match ]]; then
+        ip -br -4 -o addr show dev $if_match | awk '{ print $3 }'
+    fi
+}
+
+# -------------------------------------------------------------------
+# dummy function, metadata not used
+#
+metadata_available()
+{
+    return 0
+}
+
