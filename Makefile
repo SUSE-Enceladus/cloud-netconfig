@@ -15,14 +15,10 @@ DEST_DEFAULTDIR=$(DESTDIR)$(DEFAULTDIR)
 
 
 verSrc = $(shell cat VERSION)
-verSpecEC2 = $(shell rpm -q --specfile --qf '%{VERSION}' cloud-netconfig-ec2.spec)
-verSpecAz = $(shell rpm -q --specfile --qf '%{VERSION}' cloud-netconfig-azure.spec)
+verSpec = $(shell rpm -q --specfile --qf '%{VERSION}' cloud-netconfig.spec 2>/dev/null)
 
-ifneq "$(verSrc)" "$(verSpecEC2)"
-$(error "Version mismatch source and EC2 spec, aborting")
-endif
-ifneq "$(verSrc)" "$(verSpecAz)"
-$(error "Version mismatch source and Azure spec, aborting")
+ifneq "$(verSrc)" "$(verSpec)"
+$(error "Version mismatch source and spec, aborting")
 endif
 
 help:
@@ -51,6 +47,11 @@ install-ec2: common
 	install -m 644 common/75-cloud-persistent-net-generator.rules $(DEST_UDEVRULESDIR)
 	install -m 644 ec2/51-cloud-netconfig-hotplug.rules $(DEST_UDEVRULESDIR)
 	install -m 755 ec2/functions.cloud-netconfig $(DEST_SCRIPTDIR)
+
+install-gce: common
+  install -m 644 common/75-cloud-persistent-net-generator.rules $(DEST_UDEVRULESDIR)
+  install -m 644 gce/51-cloud-netconfig-hotplug.rules $(DEST_UDEVRULESDIR)
+  install -m 755 gce/functions.cloud-netconfig $(DEST_SCRIPTDIR)
 
 tarball:
 	@test -n "$(verSrc)"

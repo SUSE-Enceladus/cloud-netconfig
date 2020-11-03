@@ -137,6 +137,17 @@ get_cn_assigned_addrs()
 }
 
 # -------------------------------------------------------------------
+# get link status for interface
+#
+get_link_status()
+{
+    local iface="$1"
+    test -z "$iface" && return 1
+
+    ip -o -br link show dev $iface | awk '{ print $2 }'
+}
+
+# -------------------------------------------------------------------
 # add address to log
 #
 add_addr_to_log()
@@ -224,6 +235,8 @@ configure_interface_ipv4()
     get_variable "NETMASK" "$cfg"
     get_variable "BROADCAST" "$cfg"
     get_variable "GATEWAYS" "$cfg"
+    get_variable "PREFIXLEN" "$cfg"
+    get_variable "ROUTES" "$cfg"
     local HWADDR="$(cat /sys/class/net/${INTERFACE}/address)"
     local RTABLE="10${INTERFACE: -1}"
 
@@ -289,12 +302,31 @@ configure_interface_ipv4()
         if [[ -n "${GWS[0]}" ]]; then
             GW="${GWS[0]}"
         else
+            debug "No gateway from DHCP4, guessing"
             # no default route, guess one
-            # FIXME: this is not ideal; make it at least configurable
-            GW="${NETWORK%.*}.1"
+            if [[ $PREFIXLEN = 32 ]]; then
+                # peer-to-peer setup but no gateway. At the time of writing
+                # that is the setup in GCE. Subnet routes and gateway get
+                # delivered by DHCP as addtional routes.
+                for r in $ROUTES ; do
+                    if [[ ${r##*,} = 0.0.0.0 ]]; then
+                        GW="${r%%,*}"
+                        break
+                    fi
+                done
+            else
+                # we assume the gateway is the first host of the network
+                local netstart=${NETWORK##*.}
+                local gw_host_part=$((netstart+1))
+                GW="${NETWORK%.*}.${gw_host_part}"
+            fi
         fi
-        debug "adding default route for $INTERFACE table $RTABLE"
-        ip -4 route add default via $GW dev "$INTERFACE" table "$RTABLE"
+        if [[ -n $GW ]]; then
+            debug "adding default route via $GW for $INTERFACE table $RTABLE"
+            ip -4 route add default via $GW dev "$INTERFACE" table "$RTABLE"
+        else
+            warn "No default route for $INTERFACE"
+        fi
     fi
 
     # copy specific routes from the default routing table
@@ -393,6 +425,11 @@ manage_interfaceconfig()
     if [[ "$CLOUD_NETCONFIG_MANAGE" != "yes" ]]; then
         # do not touch interface
         debug "Not managing interface ${cfg##*/}"
+        return
+    fi
+    linkstatus=$(get_link_status ${cfg##*/})
+    if [[ $linkstatus != UP ]]; then
+        debug "interface ${cfg##*/} is down"
         return
     fi
     for cfg in ${1}/* ; do
