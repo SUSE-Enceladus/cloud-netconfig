@@ -19,7 +19,7 @@
 API_VERSION="2018-09-24"
 METADATA_URL_BASE="http://169.254.169.254/${API_VERSION}"
 METADATA_URL_IFACE="${METADATA_URL_BASE}/meta-data/network/interfaces/macs"
-CURL="curl -m 3 --noproxy '*'"
+CURL="curl -m 3 --noproxy 169.254.169.254"
 TOKEN_TTL="60"
 declare TOKEN
 
