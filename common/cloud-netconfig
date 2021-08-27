@@ -432,15 +432,19 @@ manage_interfaceconfig()
         debug "interface ${cfg##*/} is down"
         return
     fi
+    if ! metadata_available ; then
+        warn "Cannot access instance metadata, skipping interface configuration for ${cfg##*/}"
+        return
+    fi
     for cfg in ${1}/* ; do
         test -f $cfg || continue
         get_variable "SERVICE" "$cfg"
         case "$SERVICE" in
         "wicked-dhcp-ipv4"|"dhcpcd")
-            metadata_available && configure_interface_ipv4 "$cfg"
+            configure_interface_ipv4 "$cfg"
          ;;
         "wicked-dhcp-ipv6"|"dhcp6c")
-            metadata_available && configure_interface_ipv6 "$cfg"
+            configure_interface_ipv6 "$cfg"
         ;;
         esac
     done
