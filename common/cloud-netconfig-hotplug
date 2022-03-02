@@ -100,7 +100,7 @@ case "$ACTION" in
     ;;
 
     remove)
-        /etc/sysconfig/network/scripts/cloud-netconfig-cleanup
+        /usr/libexec/netconfig/scripts/cloud-netconfig-cleanup
     ;;
 
 esac
