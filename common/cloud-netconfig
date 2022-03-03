@@ -22,9 +22,9 @@ PROGNAME="cloud-netconfig"
 # managed by SuSEconfig when that root is not '/'
 r="$ROOT"
 
-. "$r/etc/sysconfig/network/scripts/functions.netconfig"
+. "$r/usr/libexec/netconfig/scripts/functions.netconfig"
 # for get_ipv4_addresses_from_metadata()
-. "$r/etc/sysconfig/network/scripts/functions.cloud-netconfig"
+. "$r/usr/libexec/netconfig/scripts/functions.cloud-netconfig"
 
 STATEDIR=/var/run/netconfig
 ADDRDIR=/var/run/netconfig/cloud

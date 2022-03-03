@@ -81,6 +81,7 @@ make install%{flavor_suffix} \
   DESTDIR=%{buildroot} \
   PREFIX=%{_usr} \
   SYSCONFDIR=%{_sysconfdir} \
+  LIBEXECDIR=%{_libexecdir} \
   UDEVRULESDIR=%{_udevrulesdir} \
   UNITDIR=%{_unitdir}
 
@@ -93,9 +94,12 @@ ln -s /dev/null %{buildroot}/%{_sysconfdir}/udev/rules.d/75-persistent-net-gener
 
 %files -n %{base_name}%{flavor_suffix}
 %defattr(-,root,root)
+%dir %{_libexecdir}/netconfig
+%dir %{_libexecdir}/netconfig/scripts
+%dir %{_libexecdir}/netconfig/netconfig.d
+%{_libexecdir}/netconfig/scripts/*
+%{_libexecdir}/netconfig/netconfig.d/cloud-netconfig
 %config(noreplace) %{_sysconfdir}/default/cloud-netconfig
-%{_sysconfdir}/netconfig.d/cloud-netconfig
-%{_sysconfdir}/sysconfig/network/scripts/*
 %if 0%{?suse_version} >= 1315
 %{_sysconfdir}/udev/rules.d
 %endif

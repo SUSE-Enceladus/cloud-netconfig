@@ -1,9 +1,10 @@
 .PHONY: common help install-azure install-ec2
 PREFIX?=/usr
 SYSCONFDIR?=/etc
+LIBEXECDIR?=/usr/libexec
 UDEVRULESDIR?=$(PREFIX)/lib/udev/rules.d
-NETCONFDIR?=$(SYSCONFDIR)/netconfig.d
-SCRIPTDIR?=$(SYSCONFDIR)/sysconfig/network/scripts
+NETCONFDIR?=$(LIBEXECDIR)/netconfig/netconfig.d
+SCRIPTDIR?=$(LIBEXECDIR)/netconfig/scripts
 UNITDIR?=$(PREFIX)/lib/systemd/system
 DEFAULTDIR?=$(SYSCONFDIR)/default
 DESTDIR?=
