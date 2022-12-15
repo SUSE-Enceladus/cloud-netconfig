@@ -49,11 +49,11 @@ In case the system has more than one network interface, **cloud-netconfig**
 sets up routing in a way that packets are routed through the interface
 associated with the source address of the packet. To do that, it creates a
 separate routing table for each interface with a default route according to
-the interface configration. It also creates a routing policies to use that
-table for packets using any of the interface's source addresses. This ensures
-that packets are routed via the correct interface. In case alias IPv4 ranges
-are associated with the interface, routing policies will be created for those
-as well.
+the interface configration. It also creates routing policies to use that table
+for packets using any of the interface's source addresses. This ensures that
+packets are routed via the correct interface. In case alias IPv4 ranges are
+associated with the interface, routing policies will be created for those as
+well.
 
 Note: DHCP servers of cloud frameworks may not include a gateway address in
 DHCP leases for secondary IPv4 addresses. This is presumably to avoid default
