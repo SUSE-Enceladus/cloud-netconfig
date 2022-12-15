@@ -1,0 +1,31 @@
+#!/bin/bash
+
+# Copyright (c) 2022 SUSE LLC
+#
+# This file is part of cloud-netconfig.
+#
+# cloud-netconfig is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# cloud-netconfig is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with cloud-netconfig.  If not, see <http://www.gnu.org/licenses/
+
+# This is a NetworkManager dispatcher script. It runs cloud-netconfig setup on
+# interface up and cloud-netconfig cleanup on interface down.
+
+SCRIPTDIR=/usr/libexec/cloud-netconfig
+
+if [ "$2" == "up" ]; then
+    ${SCRIPTDIR}/cloud-netconfig
+elif [ "$2" == "down" ]; then
+    ${SCRIPTDIR}/cloud-netconfig-cleanup
+fi
+
+echo $?

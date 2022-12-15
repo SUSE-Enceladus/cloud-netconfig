@@ -1,1 +1,2 @@
-SUBSYSTEM=="net", KERNEL=="eth*", DRIVERS=="hv_netvsc", RUN+="/usr/libexec/netconfig/scripts/cloud-netconfig-hotplug"
+SUBSYSTEM=="net", KERNEL=="eth*", DRIVERS=="hv_netvsc", RUN+="%SCRIPTDIR%/cloud-netconfig-hotplug"
+SUBSYSTEM=="net", KERNEL=="eth*", DRIVERS=="mlx5_core", RUN+="%SCRIPTDIR%/cleanup-stale-ifcfg"

@@ -16,7 +16,7 @@
 #
 # You should have received a copy of the GNU General Public License
 
-API_VERSION="2018-09-24"
+API_VERSION="latest"
 METADATA_URL_BASE="http://169.254.169.254/${API_VERSION}"
 METADATA_URL_IFACE="${METADATA_URL_BASE}/meta-data/network/interfaces/macs"
 CURL="curl -m 3 --noproxy 169.254.169.254"
@@ -65,7 +65,7 @@ set_from_metadata()
 
 # -------------------------------------------------------------------
 # get IPv4 address from the EC2 meta data server and return them
-# 
+#
 get_ipv4_addresses_from_metadata()
 {
     local addr count=0 hwaddr="$1" prefixlen
@@ -93,11 +93,34 @@ get_ipv4_addresses_from_metadata()
 }
 
 # -------------------------------------------------------------------
+# get IPv4 range (prefix in EC2 term) for interface
+#
+get_ipv4_ranges_from_metadata()
+{
+    local hwaddr="$1" prefixes
+    test -z "$hwaddr" && return
+    set_from_metadata prefixes "${METADATA_URL_IFACE}/${hwaddr}/ipv4-prefix" || return 1
+    echo $prefixes
+}
+
+# -------------------------------------------------------------------
+# dummy, EC2 provides gateway information in DHCP4 offer
+#
+get_gateway_from_metadata()
+{
+    return 0
+}
+
+# -------------------------------------------------------------------
 # check if metadata server is available
-# 
+#
 metadata_available()
 {   
     check_url "${METADATA_URL_BASE}/meta-data/"
     return $?
 }
 
+# if eth0 and eth1 are on the same subnet, packets may be disrouted and
+# since policy rules may not be in place yet render IMDS inaccessible;
+# force eth0 as work-around
+metadata_available || test -e /sys/class/net/eth0 && CURL="$CURL --interface eth0"

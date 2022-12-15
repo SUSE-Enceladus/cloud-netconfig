@@ -35,8 +35,13 @@ ExclusiveArch:  do-not-build
 %define csp_string Google Compute Engine
 %endif
 
+%if ! %{defined _distconfdir}
+%define _distconfdir %{_sysconfdir}
+%define no_dist_conf 1
+%endif
+
 Name:           %{base_name}%{flavor_suffix}
-Version:        1.6
+Version:        1.7
 Release:        0
 License:        GPL-3.0-or-later
 Summary:        Network configuration scripts for %{csp_string}
@@ -54,6 +59,7 @@ BuildRequires:  sysconfig-netconfig
 Requires:       sysconfig-netconfig
 %endif
 BuildRequires:  pkgconfig(udev)
+BuildRequires:  NetworkManager
 Requires:       udev
 Requires:       curl
 %if 0%{?sles_version} == 11
@@ -66,10 +72,26 @@ Provides:       cloud-netconfig
 Conflicts:      cloud-netconfig
 %endif
 %{?systemd_requires}
+%define _scriptdir %{_libexecdir}/cloud-netconfig
+%if 0%{?suse_version} > 1550
+%define _netconfigdir %{_libexecdir}/netconfig.d
+%else
+%define _netconfigdir %{_sysconfdir}/netconfig.d
+%endif
+
 
 %description -n %{base_name}%{flavor_suffix}
 This package contains scripts for automatically configuring network interfaces
 in %{csp_string} with full support for hotplug.
+
+%package -n %{base_name}-nm
+Summary:        Network configuration scripts for %{csp_string}
+Group:          System/Management
+Requires:       cloud-netconfig
+Requires:       NetworkManager
+
+%description -n %{base_name}-nm
+Dispatch script for NetworkManager that automatically runs cloud-netconfig.
 
 %prep
 %setup -q -n %{base_name}-%{version}
@@ -81,9 +103,11 @@ make install%{flavor_suffix} \
   DESTDIR=%{buildroot} \
   PREFIX=%{_usr} \
   SYSCONFDIR=%{_sysconfdir} \
-  LIBEXECDIR=%{_libexecdir} \
+  DISTCONFDIR=%{_distconfdir} \
+  SCRIPTDIR=%{_scriptdir} \
   UDEVRULESDIR=%{_udevrulesdir} \
-  UNITDIR=%{_unitdir}
+  UNITDIR=%{_unitdir} \
+  NETCONFIGDIR=%{_netconfigdir}
 
 # Disable persistent net generator from udev-persistent-ifnames as
 # it does not work for xen interfaces. This will likely produce a warning.
@@ -92,14 +116,16 @@ mkdir -p %{buildroot}/%{_sysconfdir}/udev/rules.d
 ln -s /dev/null %{buildroot}/%{_sysconfdir}/udev/rules.d/75-persistent-net-generator.rules
 %endif
 
+
 %files -n %{base_name}%{flavor_suffix}
 %defattr(-,root,root)
-%dir %{_libexecdir}/netconfig
-%dir %{_libexecdir}/netconfig/scripts
-%dir %{_libexecdir}/netconfig/netconfig.d
-%{_libexecdir}/netconfig/scripts/*
-%{_libexecdir}/netconfig/netconfig.d/cloud-netconfig
-%config(noreplace) %{_sysconfdir}/default/cloud-netconfig
+%{_scriptdir}
+%if %{defined no_config}
+%config(noreplace) %{_distconfdir}/default/cloud-netconfig
+%else
+%{_distconfdir}/default/cloud-netconfig
+%endif
+%{_netconfigdir}
 %if 0%{?suse_version} >= 1315
 %{_sysconfdir}/udev/rules.d
 %endif
@@ -107,6 +133,9 @@ ln -s /dev/null %{buildroot}/%{_sysconfdir}/udev/rules.d/75-persistent-net-gener
 %{_unitdir}/*
 %doc README.md
 %license LICENSE
+
+%files -n %{base_name}-nm
+/usr/lib/NetworkManager/dispatcher.d
 
 %pre
 %service_add_pre %{base_name}.service %{base_name}.timer

@@ -37,7 +37,7 @@ get_from_metadata()
             return
         fi
         sleep 0.5
-        result=$($CURL $url 2>/dev/null)
+        result=$($CURL $url | tr -d ' \n' 2>/dev/null)
     done
 
     echo -n $result
@@ -47,7 +47,7 @@ get_from_metadata()
 # -------------------------------------------------------------------
 # get the MAC address from the metadata server
 # format is uppercase without semicolons
-# 
+#
 get_iface_mac()
 {
     local if_idx="$1"
@@ -59,7 +59,7 @@ get_iface_mac()
 # -------------------------------------------------------------------
 # gets all IPv4 address from the Azure metadata server for given
 # interface index
-# 
+#
 get_ipv4_addresses_by_index()
 {
     local if_idx="$1" count=0 prefixlen="$2"
@@ -75,8 +75,8 @@ get_ipv4_addresses_by_index()
 }
 
 # -------------------------------------------------------------------
-# get IPv4 address from the Azure metadata server and return them
-# 
+# get IPv4 addresses from the Azure metadata server and return them
+#
 get_ipv4_addresses_from_metadata()
 {
     local idx hwaddr="$1"
@@ -90,6 +90,22 @@ get_ipv4_addresses_from_metadata()
         fi
     done
     eval "$oldopt"
+}
+
+# -------------------------------------------------------------------
+# dummy, no IP ranges in Azure
+#
+get_ipv4_ranges_from_metadata()
+{
+    return 0
+}
+
+# -------------------------------------------------------------------
+# dummy, no gateway information in metadata
+#
+get_gateway_from_metadata()
+{
+    return 0
 }
 
 # -------------------------------------------------------------------

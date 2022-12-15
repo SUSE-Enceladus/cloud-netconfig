@@ -1,6 +1,6 @@
-#!/bin/sh
+#!/bin/bash
 
-# Copyright (c) 2017 SUSE Linux GmbH
+# Copyright (c) 2022 SUSE LLC
 #
 # This file is part of cloud-netconfig.
 #
@@ -17,10 +17,13 @@
 # You should have received a copy of the GNU General Public License
 # along with cloud-netconfig.  If not, see <http://www.gnu.org/licenses/>.
 
+SCRIPTDIR=/usr/libexec/cloud-netconfig
+DISTCONFDIR=/usr/etc
 
 test -z "$INTERFACE" && exit 1
 test "$INTERFACE" == "eth0" && exit 0
 
+test -f ${DISTCONFDIR}/default/cloud-netconfig && . ${DISTCONFDIR}/default/cloud-netconfig
 test -f /etc/default/cloud-netconfig && . /etc/default/cloud-netconfig
 test -z "$CLOUD_NETCONFIG_MANAGE" && CLOUD_NETCONFIG_MANAGE=yes
 
@@ -100,7 +103,7 @@ case "$ACTION" in
     ;;
 
     remove)
-        /usr/libexec/netconfig/scripts/cloud-netconfig-cleanup
+        ${SCRIPTDIR}/cloud-netconfig-cleanup
     ;;
 
 esac
