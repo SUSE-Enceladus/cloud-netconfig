@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright (c) 2017 SUSE Linux GmbH
+# Copyright (c) 2022 SUSE LLC
 #
 # This file is part of cloud-netconfig.
 #
@@ -18,20 +18,135 @@
 # along with cloud-netconfig.  If not, see <http://www.gnu.org/licenses/
 
 PROGNAME="cloud-netconfig"
-# The environment variable ROOT indicates the root of the system to be
-# managed by SuSEconfig when that root is not '/'
-r="$ROOT"
+SCRIPTDIR=/usr/libexec/cloud-netconfig
+STATEDIR=/run/wicked
+ADDRDIR=/run/cloud-netconfig
+LOCKFILE=/run/cloud-netconfig/lock
 
-. "$r/usr/libexec/netconfig/scripts/functions.netconfig"
-# for get_ipv4_addresses_from_metadata()
-. "$r/usr/libexec/netconfig/scripts/functions.cloud-netconfig"
+. ${SCRIPTDIR}/functions.cloud-netconfig
 
-STATEDIR=/var/run/netconfig
-ADDRDIR=/var/run/netconfig/cloud
+LOGGER_OPTS="-t $PROGNAME"
+tty -s && LOGGER_OPTS="$LOGGER_OPTS -s"
+
+# -------------------------------------------------------------------
+# log debug message
+#
+debug () {
+    test "$QUIET" = "yes" && return
+    test "$DEBUG" = "yes" || return
+    logger $LOGGER_OPTS -p debug "$*"
+}
+
+# -------------------------------------------------------------------
+# log warning message
+#
+warn () {
+    test "$QUIET" = "yes" && return
+    logger $LOGGER_OPTS -p warn -t "$*"
+}
+
+# -------------------------------------------------------------------
+# log info message
+#
+log () {
+    test "$QUIET" = "yes" && return
+    logger $LOGGER_OPTS "$*"
+}
+
+# -------------------------------------------------------------------
+# get variable from file
+#
+function get_variable()
+{
+    local line
+    while read line; do
+        eval $line
+    done < <(grep "^[[:space:]]*$1=" $2 2>/dev/null)
+}
+
+# -------------------------------------------------------------------
+# print network service in use
+#
+get_network_service()
+{
+    IFS="=."
+    NET_SERVICE=(`systemctl --no-pager -p Id show network.service`)
+    echo "${NET_SERVICE[1]}"
+}
+
+# -------------------------------------------------------------------
+# print relevant information from wicked lease info
+#
+get_wicked_lease_info()
+{
+    local iface="$1" cfg="${STATEDIR}/leaseinfo.${iface}.dhcp.ipv4"
+    if [ -e "$cfg" ]; then
+        grep -E '^IPADDR|^NETWORK|^NETMASK|^BROADCAST|^GATEWAYS|^ROUTES' $cfg
+    else
+        return 1
+    fi
+}
+
+# -------------------------------------------------------------------
+# print network info from given IPv4 address and netmask
+#
+calculate_network()
+{
+    local addr=$1 netmask=$2
+    test -z "$addr" -o -z "$netmask" && return 1
+    IFS=. read -r i1 i2 i3 i4 <<< "$addr"
+    IFS=. read -r m1 m2 m3 m4 <<< "$netmask"
+    printf "%d.%d.%d.%d\n" "$((i1 & m1))" "$((i2 & m2))" "$((i3 & m3))" "$((i4 & m4))"
+}
+
+
+# -------------------------------------------------------------------
+# get relevant information from NetworkManager, map to expected
+# variable names and print them
+#
+get_nm_lease_info()
+{
+    local iface="$1"
+    test -z `type -p nmcli` && { warn "nmcli not found, cannot configure interface" ; return 1 ; }
+    local ipaddr network netmask broadcast gateways prefixlen
+    ipaddr=`nmcli -f DHCP4 -t d show $iface | grep ':ip_address' | cut -d= -f2 | tr -d ' '`
+    netmask=`nmcli -f DHCP4 -t d show $iface | grep ':subnet_mask' | cut -d= -f2 | tr -d ' '`
+    broadcast=`nmcli -f DHCP4 -t d show $iface | grep ':broadcast_address' | cut -d= -f2 | tr -d ' '`
+    gateways=`nmcli -f DHCP4 -t d show $iface | grep ':routers' | cut -d= -f2 | tr ',' ' '`
+    echo "IPADDR=$ipaddr"
+    echo -n "NETWORK="
+    calculate_network $ipaddr $netmask
+    echo "NETMASK=$netmask"
+    echo "BROADCAST=$broadcast"
+    echo "GATEWAYS=($gateways)"
+}
+
+
+# -------------------------------------------------------------------
+# print relevant lease information from used network system
+#
+get_lease_info()
+{
+    local iface="$1"
+    test -z "$iface" && return 1
+    netsys=`get_network_service`
+    case "$netsys" in
+        "wicked")
+            get_wicked_lease_info "$iface"
+            ;;
+        "NetworkManager")
+            get_nm_lease_info "$iface"
+            ;;
+        "*")
+            return 1
+            ;;
+    esac
+}
+
 
 # -------------------------------------------------------------------
 # return all IPv4 addresses currently configured on given interface
-# 
+#
 get_ipv4_addresses_from_interface()
 {
     local idx type addr iface="$1"
@@ -43,7 +158,7 @@ get_ipv4_addresses_from_interface()
 
 # -------------------------------------------------------------------
 # return all IPv6 addresses currently configured on given interface
-# 
+#
 get_ipv6_addresses_from_interface()
 {
     local idx iface_r scope_lit scope type addr rest iface="$1"
@@ -60,7 +175,7 @@ get_ipv6_addresses_from_interface()
 # -------------------------------------------------------------------
 # compare arrays and return the ones that are in the first but not
 # the second
-# 
+#
 get_extra_elements()
 {
     local actual=(${!1}) target=(${!2})
@@ -93,46 +208,16 @@ is_element()
 }
 
 # -------------------------------------------------------------------
-# look up a free priority with a given prefix from the rule table
-# 
-get_free_priority()
-{
-    local prefix="$1"
-    test -z "$prefix" && return 1
-
-    local IPV
-    [[ -n "$2" ]] && IPV="-${2}"
-
-    local prio=$((prefix*100))
-    local taken
-    while [[ $prio -lt $((prefix*100+100)) ]]; do
-        taken=0
-        while read -r no rest ; do
-            if [[ "${prio}" == "${no%%:}" ]]; then
-                taken=1
-                break
-            fi
-        done < <(ip $IPV rule show)
-        if [[ $taken == 0 ]]; then
-            echo -n "${prio}"
-            return
-        fi
-        prio=$((prio+1))
-    done
-    warn "No free priority for prefix $prefix"
-    echo -n "29999"
-}
-
-# -------------------------------------------------------------------
 # get IPv4 addresses from log dir
 #
 get_cn_assigned_addrs()
 {
     local iface="$1"
+    local addr_type="$2"
     test -z "$iface" && return 1
 
-    if [[ -e ${ADDRDIR}/${iface} ]]; then
-        echo $(cat ${ADDRDIR}/${iface})
+    if [[ -e ${ADDRDIR}/${addr_type}${iface} ]]; then
+        echo $(cat ${ADDRDIR}/${addr_type}${iface})
     fi
 }
 
@@ -154,9 +239,10 @@ add_addr_to_log()
 {
     local iface="$1"
     local addr="$2"
+    local addr_type="$3"
 
     test -z "$iface" -o -z "$addr" && return 1
-    addr_log_file="${ADDRDIR}/${iface}"
+    addr_log_file="${ADDRDIR}/${addr_type}${iface}"
     if [[ -e ${addr_log_file} ]]; then
         grep -q -x "${addr}" "${addr_log_file}" || echo "${addr}" >> "${addr_log_file}"
     else
@@ -172,9 +258,10 @@ remove_addr_from_log()
 {
     local iface="$1"
     local addr="$2"
+    local addr_type="$3"
 
     test -z "$iface" -o -z "$addr" && return 1
-    addr_log_file="${ADDRDIR}/${iface}"
+    addr_log_file="${ADDRDIR}/${addr_type}${iface}"
     if [[ -e ${addr_log_file} ]]; then
         addr_log_file_tmp=$(mktemp ${ADDRDIR}/${iface}.XXXXXXXX)
         if [ $? -ne 0 ]; then
@@ -190,34 +277,75 @@ remove_addr_from_log()
 # copy routes from default table to given table and remove routes
 # that do not exist in default table (if any)
 #
-update_routing_table()
+update_routing_tables()
 {
-    local rtable="$1"
+    local ipv="$1"
     local iface="$2"
+    local dest_table="$3"
+    local gw_table="$4"
 
-    test -z "$rtable" && return 1
+    test -z "$gw_table" && return 1
 
-    # copy routes from default table
-    for ipv in "-4" "-6" ; do
-        ip $ipv route show | grep -v "^default" | while read route ; do
-            ip $ipv route replace $route table $rtable
-        done
-
-        # Do a second run with routes specific to the interface being configured.
-        # This makes sure that in case there are competing routes (same destination
-        # but different device), the one matching the right interface is selected.
-        # This situation can happen in case there are multiple interfaces that are
-        # connected to the same subnet.
-        ip $ipv route show dev "$iface" | grep -v "^default" | while read route ; do
-            ip $ipv route replace $route dev "$iface" table $rtable
-        done
-
-        # check if there are any leftover routes and delete them
-        ip $ipv route show all table $rtable | grep -v "^default" | while read route ; do
-            ip_out="$(ip $ipv route show $route)"
-            test -z "$ip_out" && ip $ipv route del $route table $rtable
-        done
+    # copy destination specific routes from default table
+    ip $ipv route show dev $iface | grep -v "^default" | while read route  ; do
+        # expires arg can't be used as is, drop it
+        route=$(echo $route | sed -e 's/expires [^ ]*//')
+        debug "creating/replacing route $route dev $iface table $dest_table"
+        ip $ipv route replace $route dev $iface table $dest_table
     done
+
+    # copy gateway route(s) from default table
+    ip $ipv route show default dev $iface | while read route ; do
+        route=$(echo $route | sed -e 's/expires [^ ]*//')
+        debug "creating/replacing route $route dev $iface table $gw_table"
+        ip $ipv route replace $route dev $iface table $gw_table
+    done
+
+    # check if there are any leftover routes and delete them
+    ip $ipv route show all table $dest_table | grep -v "^default" | while read route; do
+        ip_out="$(ip $ipv route show $route)"
+        if [[ -z "$ip_out" ]]; then
+            debug "deleting obsolete route $route from table $dest_table"
+            ip $ipv route del $route table $dest_table
+        fi
+    done
+}
+
+# -------------------------------------------------------------------
+# copy routes from default table to given table and remove routes
+# that do not exist in default table (if any)
+#
+update_routing_policies()
+{
+    local ipv="$1"
+    local iface="$2"
+    local dest_table="$3"
+    local gw_table="$4"
+    local -n addrs=$5
+
+    # update routing policies so connections from addresses on
+    # secondary interfaces are routed via those
+    # also include IP rangers
+    local found prio from ip rest
+    for addr in ${addrs[@]} ; do
+        found=0
+        while read -r prio from ip rest ; do
+            if [[ "${addr%/32}" == "$ip" ]]; then
+                found=1
+                break
+            fi
+        done < <(ip $ipv rule show)
+        if [[ $found == 0 ]]; then
+            debug "creating policy rule for src address ${addr%/32}"
+            ip $ipv rule add from ${addr%/32} priority $dest_table lookup $dest_table
+            ip $ipv rule add from ${addr%/32} priority $gw_table lookup $gw_table
+        fi
+    done
+
+    # create main (w/o default) lookup rule, if necessary
+    if [[ -z "$(ip $ipv rule show prio 30399)" ]]; then
+        ip $ipv rule add from all table main prio 30399 suppress_prefixlength 0
+    fi
 }
 
 # -------------------------------------------------------------------
@@ -226,23 +354,38 @@ update_routing_table()
 # 
 configure_interface_ipv4()
 {
-    local cfg="$1"
-    test -z "$cfg" -o ! -f "$cfg" && return 1
-    local INTERFACE IPADDR NETWORK NETMASK BROADCAST GATEWAYS
-    get_variable "INTERFACE" "$cfg"
-    get_variable "IPADDR" "$cfg"
-    get_variable "NETWORK" "$cfg"
-    get_variable "NETMASK" "$cfg"
-    get_variable "BROADCAST" "$cfg"
-    get_variable "GATEWAYS" "$cfg"
-    get_variable "PREFIXLEN" "$cfg"
-    get_variable "ROUTES" "$cfg"
+    local INTERFACE="$1"
+    test -z "$INTERFACE" && return 1
+    local IPADDR NETWORK NETMASK BROADCAST GATEWAYS
+    eval `get_lease_info $INTERFACE`
+    if [ -z "$IPADDR" ]; then
+        warn "Could not determine address from DHCP4 lease info"
+        return 1
+    fi
     local HWADDR="$(cat /sys/class/net/${INTERFACE}/address)"
-    local RTABLE="10${INTERFACE: -1}"
+    if [ -z "$HWADDR" ]; then
+        warn "Could not determine MAC address for $INTERFACE"
+        return 1
+    fi
+    local ifindex="$(cat /sys/class/net/${INTERFACE}/ifindex)"
+    if [ -z "$ifindex" ]; then
+        warn "Could not determine interface index for $INTERFACE"
+        return 1
+    fi
+    local dest_table="$((ifindex+30000))"
+    local gw_table="$((ifindex+30400))"
 
     # get active and configured addresses
     local laddrs=($(get_ipv4_addresses_from_interface $INTERFACE))
-    local raddrs=($(get_ipv4_addresses_from_metadata $HWADDR))
+    local raddrs addr
+    for addr in $(get_ipv4_addresses_from_metadata $HWADDR) ; do
+        # validate whether element looks like an IPv4 address
+        if  [[ $addr =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}/[0-9]{1,2}$ ]]; then
+            raddrs+=($addr)
+        else
+            warn "IPv4 address \"${addr}\" from instance metadata does not look valid, skipping"
+        fi
+    done
 
     # get differences
     local addr_to_remove=($(get_extra_elements laddrs[@] raddrs[@]))
@@ -256,7 +399,6 @@ configure_interface_ipv4()
     debug "excess addresses on $INTERFACE: ${addr_to_remove[@]}"
     debug "addresses to configure on $INTERFACE: ${addr_to_add[@]}"
 
-    local addr priority
     for addr in ${addr_to_remove[@]} ; do
         # as a safety measure, check against the address received via DHCP and
         # refuse to remove it even if it is not in the meta data
@@ -286,6 +428,28 @@ configure_interface_ipv4()
         add_addr_to_log $INTERFACE $addr
     done
 
+    local ip_ranges=$(get_ipv4_ranges_from_metadata $HWADDR)
+    local local_route
+    for ipr in $ip_ranges; do
+        local_route=$(ip r show $ipr type local table local)
+        if [[ -z $local_route ]]; then
+            debug "No local route for IP range $ipr, creating one"
+            ip -4 r add local $ipr dev $INTERFACE table local
+            add_addr_to_log $INTERFACE $ipr aliases_
+        fi
+    done
+    # check if cloud-netconfig configured IP aliases were removed
+    local cn_ip_ranges=$(get_cn_assigned_addrs $INTERFACE ranges_)
+    if [[ -n $cn_ip_ranges ]]; then
+        for ipr in $cn_ip_ranges ; do
+            if [[ " $ip_ranges " == *" $ipr "* ]]; then
+                debug "IP range $ipr was removed, dropping local route"
+                ip -4 r del local $ipr dev $INTERFACE table local
+                remove_addr_from_log $INTERFACE $ipr ranges_
+            fi
+        done
+    fi
+
     # If we have a single NIC configuration, skip routing policies
     if [[ $SINGLE_NIC = yes ]]; then
        return
@@ -295,26 +459,18 @@ configure_interface_ipv4()
     # need a separate route table so we can send packets there
     # using routing policy. Check whether the table is there and
     # create it if not.
-    if [ -z "$(ip -4 route show default dev $INTERFACE table $RTABLE)" ]; then
+    if [ -z "$(ip -4 route show default dev $INTERFACE)" ]; then
         local GW GWS=()
         # we simply take the first gateway in case there is more than one
         eval GWS=\(${GATEWAYS}\)
         if [[ -n "${GWS[0]}" ]]; then
             GW="${GWS[0]}"
         else
-            debug "No gateway from DHCP4, guessing"
-            # no default route, guess one
-            if [[ $PREFIXLEN = 32 ]]; then
-                # peer-to-peer setup but no gateway. At the time of writing
-                # that is the setup in GCE. Subnet routes and gateway get
-                # delivered by DHCP as addtional routes.
-                for r in $ROUTES ; do
-                    if [[ ${r##*,} = 0.0.0.0 ]]; then
-                        GW="${r%%,*}"
-                        break
-                    fi
-                done
-            else
+            # GCE does not provide a gateway for secondary NICs in the
+            # lease info but is available via meta data.
+            GW=$(get_gateway_from_metadata $HWADDR)
+            if [ -z $GW ]; then
+                debug "No gateway info available for $INTERFACE, guessing"
                 # we assume the gateway is the first host of the network
                 local netstart=${NETWORK##*.}
                 local gw_host_part=$((netstart+1))
@@ -322,32 +478,47 @@ configure_interface_ipv4()
             fi
         fi
         if [[ -n $GW ]]; then
-            debug "adding default route via $GW for $INTERFACE table $RTABLE"
-            ip -4 route add default via $GW dev "$INTERFACE" table "$RTABLE"
+            debug "adding default route via $GW for $INTERFACE table $GW_TABLE"
+            ip -4 route add default via $GW dev "$INTERFACE" metric $((ifindex+20000))
         else
             warn "No default route for $INTERFACE"
         fi
     fi
 
     # copy specific routes from the default routing table
-    update_routing_table $RTABLE $INTERFACE
+    update_routing_tables -4 $INTERFACE $dest_table $gw_table
 
     # update routing policies so connections from addresses on
     # secondary interfaces are routed via those
-    local found prio from ip rest
+    # also include IP rangers
+    #local found prio from ip rest
+    #for addr in ${raddrs[@]} $ip_ranges ; do
+    #    found=0
+    #    while read -r prio from ip rest ; do
+    #        if [[ "${addr%/32}" == "$ip" ]]; then
+    #            found=1
+    #            break
+    #        fi
+    #    done < <(ip -4 rule show)
+    #    if [[ $found == 0 ]]; then
+	  #  debug "creating policy rule for src address ${addr%/32}"
+    #        #priority=$(get_free_priority $LOCAL_TABLE 4)
+    #        ip -4 rule add from ${addr%/32} priority $dest_table lookup $dest_table
+    #        #priority=$(get_free_priority $GW_TABLE 4)
+    #        ip -4 rule add from ${addr%/32} priority $gw_table lookup $gw_table
+    #    fi
+    #done
+    local all_addrs=()
     for addr in ${raddrs[@]} ; do
-        found=0
-        while read -r prio from ip rest ; do
-            if [[ "${addr%/*}" == "$ip" ]]; then
-                found=1
-                break
-            fi
-        done < <(ip -4 rule show)
-        if [[ $found == 0 ]]; then
-            priority=$(get_free_priority $RTABLE 4)
-            ip -4 rule add from ${addr%/*} priority $priority table $RTABLE
-        fi
+        all_addrs+=("${addr%/*}")
     done
+    all_addrs+=($ip_ranges)
+    update_routing_policies -4 $INTERFACE $dest_table $gw_table all_addrs
+
+    # create main (w/o default) lookup rule, if necessary
+    if [[ -z "$(ip -4 rule show prio 30399)" ]]; then
+        ip -4 rule add from all table main prio 30399 suppress_prefixlength 0
+    fi
 }
 
 # -------------------------------------------------------------------
@@ -355,23 +526,20 @@ configure_interface_ipv4()
 # 
 configure_interface_ipv6()
 {
-    local cfg="$1"
-    test -z "$cfg" -o ! -f "$cfg" && return 1
-    get_variable "INTERFACE" "$cfg"
+    local INTERFACE="$1"
+    test -z "$INTERFACE" && return 1
 
-    # NOTE: unlike with IPv4, we set up routing policies even for the primary
-    # interface. Default routes for IPv6 will likely have the same metric, so
-    # unlike with the IPv4 routes, where we use higher metrics for the non
-    # primary interfaces, we may run into the situation where the kernel picks
-    # the default route of a non primary interface as the main default. Using
-    # routing policies prevents that, but it means there will be a routing
-    # policy even if you do not have a secondary interface at all (not a
-    # problem, just not as nice as it could be).
+    local ifindex="$(cat /sys/class/net/${INTERFACE}/ifindex)"
+    if [ -z "$ifindex" ]; then
+        warn "Could not determine interface index for $INTERFACE"
+        return 1
+    fi
 
-    local RTABLE="10${INTERFACE: -1}"
+    local dest_table="$((ifindex+30000))"
+    local gw_table="$((ifindex+30400))"
 
     # if necessary, create route table with default route for interface
-    if [ -z "$(ip -6 route show default dev $INTERFACE table $RTABLE)" ]; then
+    if [ -z "$(ip -6 route show default dev $INTERFACE table $RTABLE 2>/dev/null)" ]; then
         # it is possible that we received the DHCP response before the
         # the router advertisement; in that case, we wait up to 10 secs
         local route via GW rest counter=0
@@ -384,28 +552,54 @@ configure_interface_ipv6()
                 sleep 1
             fi
         done
-        if [[ -z "$GW" ]]; then
-            warn "no IPv6 default route available for $INTERFACE"
-            return
-        fi
-        ip -6 route add default via $GW dev $INTERFACE table $RTABLE
     fi
 
-    local addr laddrs=($(get_ipv6_addresses_from_interface $INTERFACE))
-    local found prio from ip rest
-    for addr in ${laddrs[@]} ; do
-        found=0
-        while read -r prio from ip rest ; do
-            if [[ "${addr%/*}" == "$ip" ]]; then
-                found=1
-                break
-            fi
-        done < <(ip -6 rule show)
-        if [[ $found == 0 ]]; then
-            priority=$(get_free_priority $RTABLE 6)
-            ip -6 rule add from ${addr%/*} priority $priority table $RTABLE
-        fi
-    done
+    update_routing_tables -6 $INTERFACE $dest_table $gw_table
+    local laddrs=($(get_ipv6_addresses_from_interface $INTERFACE))
+    update_routing_policies -6 $INTERFACE $dest_table $gw_table laddrs
+
+    #local addr laddrs=($(get_ipv6_addresses_from_interface $INTERFACE))
+    #local found prio from ip rest
+    #for addr in ${laddrs[@]} ; do
+    #    found=0
+    #    while read -r prio from ip rest ; do
+    #        if [[ "${addr%/*}" == "$ip" ]]; then
+    #            found=1
+    #            break
+    #        fi
+    #    done < <(ip -6 rule show)
+    #    if [[ $found == 0 ]]; then
+    #        priority=$(get_free_priority $RTABLE 6)
+    #        debug "creating policy rule for address ${addr%/*}"
+    #        ip -6 rule add from ${addr%/*} priority $priority table $RTABLE
+    #    fi
+    #done
+
+    ## create main (w/o default) lookup rule, if necessary
+    #if [[ -z "$(ip -6 rule show prio 30399)" ]]; then
+    #    ip -6 rule add from all table main prio 30399 suppress_prefixlength 0
+    #fi
+}
+
+# -------------------------------------------------------------------
+# Check if interface has a DHCP lease. Takes interface name
+# and IP version.
+#
+iface_has_lease()
+{
+    local iface="$1" ipv="$2"
+    test -z "$iface" && return 1
+    test "$ipv" != "4" -a "$ipv" != "6" && return 1
+
+    local netsys=`get_network_service`
+    if [ "$netsys" == "wicked" ]; then
+        test -e /run/wicked/leaseinfo.${iface}.dhcp.ipv${ipv}
+        return $?
+    elif [ "$netsys" == "NetworkManager" ]; then
+        nmcli -f DHCP${ipv} -t d show $iface | grep -q -E ':ip6?_address'
+        return $?
+    fi
+    return 1
 }
 
 # -------------------------------------------------------------------
@@ -415,55 +609,68 @@ configure_interface_ipv6()
 # 
 manage_interfaceconfig()
 {
-    local cfg="$1"
-    test -z "$cfg" -o ! -d "$cfg" && return 1
-    local ifcfg="/etc/sysconfig/network/ifcfg-${cfg##*/}"
+    local iface="$1"
+    test -z "$iface" && return 1
+    local netsys=`get_network_service`
     local CLOUD_NETCONFIG_MANAGE
-    if [[ -f "${ifcfg}" ]]; then
-        get_variable "CLOUD_NETCONFIG_MANAGE" "${ifcfg}"
+    if [ "$netsys" == "wicked" ]; then
+        local ifcfg="/etc/sysconfig/network/ifcfg-${iface}"
+        if [[ -f "${ifcfg}" ]]; then
+            get_variable "CLOUD_NETCONFIG_MANAGE" "${ifcfg}"
+        fi
+    elif [ "$netsys" == "NetworkManager" ]; then
+        get_variable "CLOUD_NETCONFIG_MANAGE" /etc/default/cloud-netconfig
+    else
+        debug "Unknown network service $netsys. Not handling interface configuration."
+        return
     fi
     if [[ "$CLOUD_NETCONFIG_MANAGE" != "yes" ]]; then
         # do not touch interface
-        debug "Not managing interface ${cfg##*/}"
+        debug "Not managing interface ${iface}"
         return
     fi
-    linkstatus=$(get_link_status ${cfg##*/})
+    linkstatus=$(get_link_status ${iface})
     if [[ $linkstatus != UP ]]; then
-        debug "interface ${cfg##*/} is down"
+        debug "interface ${iface} is down"
         return
     fi
     if ! metadata_available ; then
-        warn "Cannot access instance metadata, skipping interface configuration for ${cfg##*/}"
+        warn "Cannot access instance metadata, skipping interface configuration for ${iface}"
         return
     fi
-    for cfg in ${1}/* ; do
-        test -f $cfg || continue
-        get_variable "SERVICE" "$cfg"
-        case "$SERVICE" in
-        "wicked-dhcp-ipv4"|"dhcpcd")
-            configure_interface_ipv4 "$cfg"
-         ;;
-        "wicked-dhcp-ipv6"|"dhcp6c")
-            configure_interface_ipv6 "$cfg"
-        ;;
-        esac
-    done
+    iface_has_lease $iface 4 && configure_interface_ipv4 $iface
+    iface_has_lease $iface 6 && configure_interface_ipv6 $iface
 }
 
-if_dirs=()
-for IFDIR in $STATEDIR/* ; do
-    test -d $IFDIR -a -d "/sys/class/net/${IFDIR##*/}" || continue
-    test ${IFDIR##*/} = "lo" && continue
-    if_dirs+=($IFDIR)
+if [ ! -d $ADDRDIR ]; then
+    rm -f $ADDRDIR
+    mkdir $ADDRDIR
+fi
+
+test -e "$LOCKFILE" && exit 0
+
+trap "rm -f $LOCKFILE" EXIT
+touch $LOCKFILE
+
+get_variable DEBUG /etc/sysconfig/network/config
+
+nics=()
+for IFDIR in /sys/class/net/* ; do
+    # skip virtual and bonded interfaces
+    test -e $IFDIR/device || continue
+    test -e $IFDIR/master && continue
+    nics+=(${IFDIR##*/})
 done
 
 # set single NIC flag if appropriate
-if [[ ${#if_dirs[@]} -eq 1 ]]; then
+if [[ ${#nics[@]} -eq 1 ]]; then
     SINGLE_NIC=yes
 else
     SINGLE_NIC=no
 fi
 
-for IFDIR in ${if_dirs[@]} ; do
-    manage_interfaceconfig $IFDIR
+for nic in ${nics[@]} ; do
+    manage_interfaceconfig $nic
 done
+
+exit 0

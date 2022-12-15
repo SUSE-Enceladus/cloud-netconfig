@@ -16,30 +16,95 @@
 #
 # You should have received a copy of the GNU General Public License
 
+METADATA_BASE_URL="http://169.254.169.254/computeMetadata/v1/instance/network-interfaces/"
+URL_HDR="Metadata-Flavor:Google"
+CURL="curl -m 3 --noproxy 169.254.169.254 -H $URL_HDR"
+
+# -------------------------------------------------------------------
+# look up a meta data item
+#
+get_from_metadata()
+{
+    local url="${METADATA_BASE_URL}${1}"
+    local result=$($CURL $url 2>/dev/null)
+    echo -n $result
+}
+
 # -------------------------------------------------------------------
 # no metadata lookup in GCE required due to no secondary IP addresses
 # simply look up local addresses
 #
 get_ipv4_addresses_from_metadata()
 {
-    local iface status mac if_match addr hwaddr="$1"
+    local hwaddr="$1"
     test -z "$hwaddr" && return 1
-    while read -r iface status mac rest ; do
+
+    local nics=$(get_from_metadata)
+    for idx in $nics ; do
+        local mac=$(get_from_metadata "${idx}mac")
         if [[ $mac == $hwaddr ]]; then
-            if_match=$iface
-            break
+            local addr=$(get_from_metadata ${idx}ip)
+            if [[ ${addr} == ${addr%/*} ]]; then
+                addr="${addr}/32"
+            fi
+            echo $addr
+            return 0
         fi
-    done < <(ip -br -o -4 link show)
-    if [[ -n $if_match ]]; then
-        ip -br -4 -o addr show dev $if_match | awk '{ print $3 }'
-    fi
+    done
+    return 1
 }
 
 # -------------------------------------------------------------------
-# dummy function, metadata not used
+# look up gateway information in metadata
+#
+get_gateway_from_metadata()
+{
+    local hwaddr="$1"
+    test -z "$hwaddr" && return 1
+
+    local nics=$(get_from_metadata)
+    for idx in $nics ; do
+        local mac=$(get_from_metadata "${idx}mac")
+        if [[ $mac == $hwaddr ]]; then
+            get_from_metadata ${idx}gateway
+            return 0
+        fi
+    done
+    return 1
+}
+
+# -------------------------------------------------------------------
+# look up IP range information for interface
+#
+get_ipv4_ranges_from_metadata()
+{
+    local hwaddr="$1" mac ipalias ipaliases aliases_str
+    test -z "$hwaddr" && return 1
+
+    local nics=$(get_from_metadata)
+    for idx in $nics ; do
+        mac=$(get_from_metadata "${idx}mac")
+        if [[ $mac == $hwaddr ]]; then
+            ipaliases=$(get_from_metadata ${idx}ip-aliases/)
+            if [[ -n $ipaliases ]]; then
+                for ipalias in $ipaliases ; do
+                     aliases_str="$aliases_str `get_from_metadata "${idx}ip-aliases/${ipalias}" | tr -d '\n'`"
+                done
+                echo $aliases_str
+            fi
+            return 0
+        fi
+    done
+    return 1
+}
+
+# -------------------------------------------------------------------
+# check whether metadata is available
 #
 metadata_available()
 {
-    return 0
+    local resp=$($CURL "http://metadata.google.internal/computeMetadata/v1/instance/id" 2>/dev/null)
+    [[ -n "$resp" ]]
+    return $?
 }
 

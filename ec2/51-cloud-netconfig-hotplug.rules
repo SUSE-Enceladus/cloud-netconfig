@@ -1,2 +1,2 @@
 ACTION=="add", SUBSYSTEM=="net", KERNEL=="eth*", IMPORT{program}="/bin/sleep 1"
-SUBSYSTEM=="net", KERNEL=="eth*", RUN+="/usr/libexec/netconfig/scripts/cloud-netconfig-hotplug"
+SUBSYSTEM=="net", KERNEL=="eth*", RUN+="%SCRIPTDIR%/cloud-netconfig-hotplug"

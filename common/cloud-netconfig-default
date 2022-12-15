@@ -1,2 +1,4 @@
-# Default value cloud-netconfig should use when creating new ifcfg files
+# Default value cloud-netconfig should use when creating new ifcfg files.
+# On systems that use NetworkManager systems, this globally enables or
+# disables cloud-netconfig.
 CLOUD_NETCONFIG_MANAGE="yes"
