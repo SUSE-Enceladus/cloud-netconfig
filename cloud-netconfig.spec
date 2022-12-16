@@ -59,7 +59,9 @@ BuildRequires:  sysconfig-netconfig
 Requires:       sysconfig-netconfig
 %endif
 BuildRequires:  pkgconfig(udev)
+%if 0%{?sle_version} > 150100
 BuildRequires:  NetworkManager
+%endif
 Requires:       udev
 Requires:       curl
 %if 0%{?sles_version} == 11
@@ -84,7 +86,7 @@ Conflicts:      cloud-netconfig
 This package contains scripts for automatically configuring network interfaces
 in %{csp_string} with full support for hotplug.
 
-%if 0%{?suse_version} >= 1500
+%if 0%{?sle_version} > 150100
 %package -n %{base_name}-nm
 Summary:        Network configuration scripts for %{csp_string}
 Group:          System/Management
@@ -119,7 +121,7 @@ ln -s /dev/null %{buildroot}/%{_sysconfdir}/udev/rules.d/75-persistent-net-gener
 %endif
 
 
-%if 0%{?suse_version} < 1500
+%if 0%{?sle_version} <= 150100
 rm -r %{buildroot}/usr/lib/NetworkManager
 %endif
 
@@ -140,7 +142,7 @@ rm -r %{buildroot}/usr/lib/NetworkManager
 %doc README.md
 %license LICENSE
 
-%if 0%{?suse_version} >= 1500
+%if 0%{?sle_version} > 150100
 %files -n %{base_name}-nm
 /usr/lib/NetworkManager/dispatcher.d
 %endif
