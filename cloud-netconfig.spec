@@ -1,7 +1,7 @@
 #
 # spec file for package cloud-netconfig
 #
-# Copyright (c) 2017 SUSE Linux GmbH, Nuernberg, Germany.
+# Copyright (c) 2022 SUSE Linux GmbH, Nuernberg, Germany.
 #
 # All modifications and additions to the file contributed by third parties
 # remain the property of their copyright owners, unless otherwise agreed
@@ -84,6 +84,7 @@ Conflicts:      cloud-netconfig
 This package contains scripts for automatically configuring network interfaces
 in %{csp_string} with full support for hotplug.
 
+%if 0%{?suse_version} >= 1500
 %package -n %{base_name}-nm
 Summary:        Network configuration scripts for %{csp_string}
 Group:          System/Management
@@ -92,6 +93,7 @@ Requires:       NetworkManager
 
 %description -n %{base_name}-nm
 Dispatch script for NetworkManager that automatically runs cloud-netconfig.
+%endif
 
 %prep
 %setup -q -n %{base_name}-%{version}
@@ -117,6 +119,10 @@ ln -s /dev/null %{buildroot}/%{_sysconfdir}/udev/rules.d/75-persistent-net-gener
 %endif
 
 
+%if 0%{?suse_version} < 1500
+rm -r %{buildroot}/usr/lib/NetworkManager
+%endif
+
 %files -n %{base_name}%{flavor_suffix}
 %defattr(-,root,root)
 %{_scriptdir}
@@ -134,8 +140,10 @@ ln -s /dev/null %{buildroot}/%{_sysconfdir}/udev/rules.d/75-persistent-net-gener
 %doc README.md
 %license LICENSE
 
+%if 0%{?suse_version} >= 1500
 %files -n %{base_name}-nm
 /usr/lib/NetworkManager/dispatcher.d
+%endif
 
 %pre
 %service_add_pre %{base_name}.service %{base_name}.timer
