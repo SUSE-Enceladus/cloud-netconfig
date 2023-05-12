@@ -59,6 +59,7 @@ BuildRequires:  sysconfig-netconfig
 Requires:       sysconfig-netconfig
 %endif
 BuildRequires:  pkgconfig(udev)
+BuildRequires:  systemd-rpm-macros
 %if 0%{?sle_version} > 150100
 BuildRequires:  NetworkManager
 %endif
@@ -73,7 +74,11 @@ Conflicts:      otherproviders(cloud-netconfig)
 Provides:       cloud-netconfig
 Conflicts:      cloud-netconfig
 %endif
+%if 0%{?suse_version} == 1315
 %{?systemd_requires}
+%else
+%{?systemd_ordering}
+%endif
 %define _scriptdir %{_libexecdir}/cloud-netconfig
 %if 0%{?suse_version} > 1550
 %define _netconfigdir %{_libexecdir}/netconfig.d
