@@ -113,8 +113,8 @@ get_gateway_from_metadata()
 # 
 metadata_available()
 {
-    local resp=$($CURL "http://169.254.169.254/metadata${URL_APX}" 2>/dev/null)
-    [[ "$resp" == *instance/* ]]
+    local resp=$($CURL "http://169.254.169.254/metadata/instance/${URL_APX}" 2>/dev/null)
+    [[ "$resp" == *network/* ]]
     return $?
 }
 
