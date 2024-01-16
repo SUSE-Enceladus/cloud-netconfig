@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright (c) 2017 SUSE Linux GmbH
+# Copyright (c) 2017-2024 SUSE Linux GmbH
 #
 # This file is part of cloud-netconfig.
 #
@@ -18,8 +18,9 @@
 
 API_VERSION="latest"
 METADATA_URL_BASE="http://169.254.169.254/${API_VERSION}"
+METADATA_URL_BASE6="http://[fd00:ec2::254]/${API_VERSION}"
 METADATA_URL_IFACE="${METADATA_URL_BASE}/meta-data/network/interfaces/macs"
-CURL="curl -m 3 --noproxy 169.254.169.254"
+CURL="curl -m 3 --noproxy 169.254.169.254,[fd00:ec2::254]"
 TOKEN_TTL="60"
 declare TOKEN
 
@@ -31,6 +32,13 @@ set_metadata_token()
     if [ -z "$TOKEN" ]; then
       TOKEN=$($CURL -X PUT "http://169.254.169.254/latest/api/token" \
               -H "X-aws-ec2-metadata-token-ttl-seconds: $TOKEN_TTL" 2>/dev/null)
+      # no token, try IPv6
+      test -z "$TOKEN" && TOKEN=$($CURL -X PUT "http://[fd00:ec2::254]/latest/api/token" \
+              -H "X-aws-ec2-metadata-token-ttl-seconds: $TOKEN_TTL" 2>/dev/null)
+      if [ -n "$TOKEN" ]; then
+          METADATA_URL_BASE=${METADATA_URL_BASE6}
+          METADATA_URL_IFACE="${METADATA_URL_BASE}/meta-data/network/interfaces/macs"
+      fi
     fi
 }
 

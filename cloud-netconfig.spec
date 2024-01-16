@@ -1,7 +1,7 @@
 #
 # spec file for package cloud-netconfig
 #
-# Copyright (c) 2022 SUSE Linux GmbH, Nuernberg, Germany.
+# Copyright (c) 2024 SUSE Linux GmbH, Nuernberg, Germany.
 #
 # All modifications and additions to the file contributed by third parties
 # remain the property of their copyright owners, unless otherwise agreed
@@ -40,8 +40,14 @@ ExclusiveArch:  do-not-build
 %define no_dist_conf 1
 %endif
 
+%if 0%{?suse_version} == 1600
+%define with_sysconfig 0
+%else
+%define with_sysconfig 1
+%endif
+
 Name:           %{base_name}%{flavor_suffix}
-Version:        1.8
+Version:        1.9
 Release:        0
 License:        GPL-3.0-or-later
 Summary:        Network configuration scripts for %{csp_string}
@@ -54,9 +60,6 @@ BuildArch:      noarch
 BuildRequires:  sysconfig
 Requires:       sysconfig
 %define _udevrulesdir %{_sysconfdir}/udev/rules.d
-%else
-BuildRequires:  sysconfig-netconfig
-Requires:       sysconfig-netconfig
 %endif
 BuildRequires:  pkgconfig(udev)
 BuildRequires:  systemd-rpm-macros
@@ -134,16 +137,23 @@ ln -s %{_scriptdir}/cloud-netconfig-cleanup %{buildroot}/%{_sysconfdir}/sysconfi
 rm -r %{buildroot}/usr/lib/NetworkManager
 %endif
 
+%if %{with_sysconfig} == 0
+rm -r %{buildroot}/%{_netconfigdir}
+rm -r %{buildroot}/%{_sysconfdir}/sysconfig
+%endif
+
 %files -n %{base_name}%{flavor_suffix}
 %defattr(-,root,root)
 %{_scriptdir}
-%{_sysconfdir}/sysconfig/network/scripts/cloud-netconfig-cleanup
 %if %{defined no_dist_conf}
 %config(noreplace) %{_distconfdir}/default/cloud-netconfig
 %else
 %{_distconfdir}/default/cloud-netconfig
 %endif
+%if %{with_sysconfig} == 1
 %{_netconfigdir}
+%{_sysconfdir}/sysconfig/network/scripts/cloud-netconfig-cleanup
+%endif
 %if 0%{?suse_version} >= 1315
 %{_sysconfdir}/udev/rules.d
 %endif

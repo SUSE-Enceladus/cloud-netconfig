@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright (c) 2022 SUSE LLC
+# Copyright (c) 2022-2024 SUSE LLC
 #
 # This file is part of cloud-netconfig.
 #
@@ -22,6 +22,7 @@ SCRIPTDIR=/usr/libexec/cloud-netconfig
 STATEDIR=/run/wicked
 ADDRDIR=/run/cloud-netconfig
 LOCKFILE=/run/cloud-netconfig/lock
+LOGLEVEL=2
 
 . ${SCRIPTDIR}/functions.cloud-netconfig
 
@@ -31,26 +32,62 @@ tty -s && LOGGER_OPTS="$LOGGER_OPTS -s"
 # -------------------------------------------------------------------
 # log debug message
 #
-debug () {
-    test "$QUIET" = "yes" && return
-    test "$DEBUG" = "yes" || return
+debug()
+{
+    test $LOGLEVEL -lt 3 && return
     logger $LOGGER_OPTS -p debug "$*"
 }
 
 # -------------------------------------------------------------------
 # log warning message
 #
-warn () {
-    test "$QUIET" = "yes" && return
+warn()
+{
+    test $LOGLEVEL -lt 1 && return
     logger $LOGGER_OPTS -p warn -t "$*"
 }
 
 # -------------------------------------------------------------------
 # log info message
 #
-log () {
-    test "$QUIET" = "yes" && return
+log()
+{
+    test $LOGLEVEL -lt 2 && return
     logger $LOGGER_OPTS "$*"
+}
+
+# -------------------------------------------------------------------
+# set log level depending on network system config
+#
+set_loglevel()
+{
+    netsys=$(get_network_service)
+
+    case "$netsys" in
+       "wicked")
+            if [[ -f /etc/sysconfig/network/config ]]; then
+                get_variable DEBUG /etc/sysconfig/network/config
+                test "$DEBUG" == "yes" && LOGLEVEL=3
+            fi
+            ;;
+       "NetworkManager")
+           local ll=$(nmcli g logging | grep 'DISPATCH' | cut -f1 -d' ')
+           case "$ll" in
+               OFF)
+                   LOGLEVEL=0
+                   ;;
+               WARN|ERR)
+                   LOGLEVEL=1
+                   ;;
+               INFO)
+                   LOGLEVEL=2
+                   ;;
+               DEBUG|TRACE)
+                   LOGLEVEL=3
+                   ;;
+           esac
+           ;;
+    esac
 }
 
 # -------------------------------------------------------------------
@@ -351,7 +388,7 @@ update_routing_policies()
 # -------------------------------------------------------------------
 # configure interface with secondary IPv4 addresses configured in the
 # cloud framework and set up routing policies
-# 
+#
 configure_interface_ipv4()
 {
     local INTERFACE="$1"
@@ -523,7 +560,7 @@ configure_interface_ipv4()
 
 # -------------------------------------------------------------------
 # set up IPv6 routing policies
-# 
+#
 configure_interface_ipv6()
 {
     local INTERFACE="$1"
@@ -606,7 +643,7 @@ iface_has_lease()
 # check if interface is configured to be managed by cloud-netconfig
 # and whether it is DHCP configured; if yes, apply settings from
 # the cloud framework
-# 
+#
 manage_interfaceconfig()
 {
     local iface="$1"
@@ -652,7 +689,7 @@ test -e "$LOCKFILE" && exit 0
 trap "rm -f $LOCKFILE" EXIT
 touch $LOCKFILE
 
-get_variable DEBUG /etc/sysconfig/network/config
+set_loglevel
 
 nics=()
 for IFDIR in /sys/class/net/* ; do
