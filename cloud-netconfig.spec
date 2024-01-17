@@ -152,7 +152,7 @@ rm -r %{buildroot}/%{_sysconfdir}/sysconfig
 %endif
 %if %{with_sysconfig} == 1
 %{_netconfigdir}
-%{_sysconfdir}/sysconfig/network/scripts/cloud-netconfig-cleanup
+%{_sysconfdir}/sysconfig/network
 %endif
 %if 0%{?suse_version} >= 1315
 %{_sysconfdir}/udev/rules.d
