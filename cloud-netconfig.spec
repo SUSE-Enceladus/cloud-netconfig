@@ -1,7 +1,7 @@
 #
-# spec file for package cloud-netconfig
+# spec file
 #
-# Copyright (c) 2024 SUSE Linux GmbH, Nuernberg, Germany.
+# Copyright (c) 2024 SUSE LLC
 #
 # All modifications and additions to the file contributed by third parties
 # remain the property of their copyright owners, unless otherwise agreed
@@ -12,8 +12,9 @@
 # license that conforms to the Open Source Definition (Version 1.9)
 # published by the Open Source Initiative.
 
-# Please submit bugfixes or comments via http://bugs.opensuse.org/
+# Please submit bugfixes or comments via https://bugs.opensuse.org/
 #
+
 
 %define base_name cloud-netconfig
 
@@ -51,32 +52,18 @@ Version:        1.9
 Release:        0
 License:        GPL-3.0-or-later
 Summary:        Network configuration scripts for %{csp_string}
-Url:            https://github.com/SUSE-Enceladus/cloud-netconfig
+URL:            https://github.com/SUSE-Enceladus/cloud-netconfig
 Group:          System/Management
 Source0:        %{base_name}-%{version}.tar.bz2
 BuildRoot:      %{_tmppath}/%{name}-%{version}-build
 BuildArch:      noarch
-%if 0%{?suse_version} == 1110
-BuildRequires:  sysconfig
-Requires:       sysconfig
-%define _udevrulesdir %{_sysconfdir}/udev/rules.d
-%endif
-BuildRequires:  pkgconfig(udev)
-BuildRequires:  systemd-rpm-macros
-%if 0%{?sle_version} > 150100
 BuildRequires:  NetworkManager
-%endif
-Requires:       udev
+BuildRequires:  systemd-rpm-macros
+BuildRequires:  pkgconfig(udev)
 Requires:       curl
-%if 0%{?sles_version} == 11
-# RPM in SLES 11 does not support self conflict, use otherproviders()
-# workaround
-Provides:       cloud-netconfig
-Conflicts:      otherproviders(cloud-netconfig)
-%else
+Requires:       udev
 Provides:       cloud-netconfig
 Conflicts:      cloud-netconfig
-%endif
 %if 0%{?suse_version} == 1315
 %{?systemd_requires}
 %else
@@ -89,21 +76,18 @@ Conflicts:      cloud-netconfig
 %define _netconfigdir %{_sysconfdir}/netconfig.d
 %endif
 
-
 %description -n %{base_name}%{flavor_suffix}
 This package contains scripts for automatically configuring network interfaces
 in %{csp_string} with full support for hotplug.
 
-%if 0%{?sle_version} > 150100
 %package -n %{base_name}-nm
 Summary:        Network configuration scripts for %{csp_string}
 Group:          System/Management
-Requires:       cloud-netconfig
 Requires:       NetworkManager
+Requires:       cloud-netconfig
 
 %description -n %{base_name}-nm
 Dispatch script for NetworkManager that automatically runs cloud-netconfig.
-%endif
 
 %prep
 %setup -q -n %{base_name}-%{version}
@@ -133,10 +117,6 @@ ln -s /dev/null %{buildroot}/%{_sysconfdir}/udev/rules.d/75-persistent-net-gener
 mkdir -p %{buildroot}/%{_sysconfdir}/sysconfig/network/scripts
 ln -s %{_scriptdir}/cloud-netconfig-cleanup %{buildroot}/%{_sysconfdir}/sysconfig/network/scripts/cloud-netconfig-cleanup
 
-%if 0%{?sle_version} <= 150100
-rm -r %{buildroot}/usr/lib/NetworkManager
-%endif
-
 %if %{with_sysconfig} == 0
 rm -r %{buildroot}/%{_netconfigdir}
 rm -r %{buildroot}/%{_sysconfdir}/sysconfig
@@ -162,10 +142,8 @@ rm -r %{buildroot}/%{_sysconfdir}/sysconfig
 %doc README.md
 %license LICENSE
 
-%if 0%{?sle_version} > 150100
 %files -n %{base_name}-nm
 /usr/lib/NetworkManager/dispatcher.d
-%endif
 
 %pre
 %service_add_pre %{base_name}.service %{base_name}.timer
