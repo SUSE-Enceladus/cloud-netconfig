@@ -37,21 +37,15 @@ common:
 	mkdir -p $(DESTDIR)$(SCRIPTDIR)
 	mkdir -p $(DESTDIR)$(UNITDIR)
 	mkdir -p $(DESTDIR)$(DEFAULTDIR)
-	mkdir -p $(DESTDIR)$(NETCONFIGDIR)
-	mkdir -p $(DESTDIR)$(NMDISPATCHDIR)
 	install -m 755 common/cloud-netconfig $(DESTDIR)$(SCRIPTDIR)
 	install -m 755 common/cloud-netconfig-cleanup $(DESTDIR)$(SCRIPTDIR)
 	install -m 644 common/cloud-netconfig-default $(DESTDIR)$(DEFAULTDIR)/cloud-netconfig
 	install -m 755 common/cloud-netconfig-hotplug $(DESTDIR)$(SCRIPTDIR)
-	install -m 755 common/cloud-netconfig-wrapper $(DESTDIR)$(NETCONFIGDIR)/cloud-netconfig
-	install -m 755 common/cloud-netconfig-nm $(DESTDIR)$(NMDISPATCHDIR)/$(NM_DISPATCH_SCRIPT)
 	install -m 644 systemd/cloud-netconfig.service $(DESTDIR)$(UNITDIR)
 	install -m 644 systemd/cloud-netconfig.timer $(DESTDIR)$(UNITDIR)
 	sed -i -r -e "s;SCRIPTDIR=.*;SCRIPTDIR=${SCRIPTDIR};g" $(DESTDIR)$(SCRIPTDIR)/cloud-netconfig
 	sed -i -r -e "s;SCRIPTDIR=.*;SCRIPTDIR=${SCRIPTDIR};g" $(DESTDIR)$(SCRIPTDIR)/cloud-netconfig-hotplug
 	sed -i -r -e "s;DISTCONFDIR=.*;DISTCONFDIR=${DISTCONFDIR};g" $(DESTDIR)$(SCRIPTDIR)/cloud-netconfig-hotplug
-	sed -i -r -e "s;SCRIPTDIR=.*;SCRIPTDIR=${SCRIPTDIR};g" $(DESTDIR)$(NETCONFIGDIR)/cloud-netconfig
-	sed -i -r -e "s;SCRIPTDIR=.*;SCRIPTDIR=${SCRIPTDIR};g" $(DESTDIR)$(NMDISPATCHDIR)/$(NM_DISPATCH_SCRIPT)
 	sed -i -r -e "s;%SCRIPTDIR%;${SCRIPTDIR};g" $(DESTDIR)$(UNITDIR)/cloud-netconfig.service
 
 install-azure: common
@@ -71,6 +65,16 @@ install-gce: common
 	install -m 644 gce/51-cloud-netconfig-hotplug.rules $(DESTDIR)$(UDEVRULESDIR)
 	install -m 755 gce/functions.cloud-netconfig $(DESTDIR)$(SCRIPTDIR)
 	sed -i -e "s;%SCRIPTDIR%;${SCRIPTDIR};g" $(DESTDIR)$(UDEVRULESDIR)/*hotplug.rules
+
+install-netconfig-wrapper:
+	mkdir -p $(DESTDIR)$(NETCONFIGDIR)
+	install -m 755 common/cloud-netconfig-wrapper $(DESTDIR)$(NETCONFIGDIR)/cloud-netconfig
+	sed -i -r -e "s;SCRIPTDIR=.*;SCRIPTDIR=${SCRIPTDIR};g" $(DESTDIR)$(NETCONFIGDIR)/cloud-netconfig
+
+install-nm-dispatcher:
+	mkdir -p $(DESTDIR)$(NMDISPATCHDIR)
+	install -m 755 common/cloud-netconfig-nm $(DESTDIR)$(NMDISPATCHDIR)/$(NM_DISPATCH_SCRIPT)
+	sed -i -r -e "s;SCRIPTDIR=.*;SCRIPTDIR=${SCRIPTDIR};g" $(DESTDIR)$(NMDISPATCHDIR)/$(NM_DISPATCH_SCRIPT)
 
 tarball:
 	@test -n "$(verSrc)"
