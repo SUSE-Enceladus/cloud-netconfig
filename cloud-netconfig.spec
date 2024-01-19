@@ -17,16 +17,11 @@
 
 
 %define base_name cloud-netconfig
-%define build_nm_pkg 0
 
 %if "@BUILD_FLAVOR@" == ""
 %define flavor_suffix %nil
 %define csp_string None
-%if 0%{?sle_version} > 150100 || 0%{?suse_version} >= 1600
-%define build_nm_pkg 1
-%else
 ExclusiveArch:  do-not-build
-%endif
 %endif
 %if "@BUILD_FLAVOR@" == "azure"
 %define flavor_suffix -azure
@@ -53,7 +48,7 @@ ExclusiveArch:  do-not-build
 %endif
 
 Name:           %{base_name}%{flavor_suffix}
-Version:        1.9
+Version:        1.10
 Release:        0
 License:        GPL-3.0-or-later
 Summary:        Network configuration scripts for %{csp_string}
@@ -64,9 +59,6 @@ BuildRoot:      %{_tmppath}/%{name}-%{version}-build
 BuildArch:      noarch
 BuildRequires:  systemd-rpm-macros
 BuildRequires:  pkgconfig(udev)
-%if %{build_nm_pkg} == 1
-BuildRequires:  NetworkManager
-%endif
 Requires:       curl
 Requires:       udev
 Provides:       cloud-netconfig
@@ -87,27 +79,12 @@ Conflicts:      cloud-netconfig
 This package contains scripts for automatically configuring network interfaces
 in %{csp_string} with full support for hotplug.
 
-%if %{build_nm_pkg} == 1
-%package -n %{base_name}-nm
-Summary:        Network configuration scripts for %{csp_string}
-Group:          System/Management
-Requires:       NetworkManager
-Requires:       cloud-netconfig
-
-%description -n %{base_name}-nm
-Dispatch script for NetworkManager that automatically runs cloud-netconfig.
-%endif
-
 %prep
 %setup -q -n %{base_name}-%{version}
 
 %build
 
 %install
-%if %{build_nm_pkg}
-make install-nm-dispatcher \
-  DESTDIR=%{buildroot}
-%else
 make install%{flavor_suffix} \
   DESTDIR=%{buildroot} \
   PREFIX=%{_usr} \
@@ -116,7 +93,8 @@ make install%{flavor_suffix} \
   SCRIPTDIR=%{_scriptdir} \
   UDEVRULESDIR=%{_udevrulesdir} \
   UNITDIR=%{_unitdir} \
-  NETCONFIGDIR=%{_netconfigdir}
+  NETCONFIGDIR=%{_netconfigdir} \
+  NMDISPATCHDIR=/usr/lib/NetworkManager/dispatcher.d
 
 # Disable persistent net generator from udev-persistent-ifnames as
 # it does not work for xen interfaces. This will likely produce a warning.
@@ -135,9 +113,7 @@ make install-netconfig-wrapper \
 mkdir -p %{buildroot}/%{_sysconfdir}/sysconfig/network/scripts
 ln -s %{_scriptdir}/cloud-netconfig-cleanup %{buildroot}/%{_sysconfdir}/sysconfig/network/scripts/cloud-netconfig-cleanup
 %endif
-%endif
 
-%if %{build_nm_pkg} == 0
 %files -n %{base_name}%{flavor_suffix}
 %defattr(-,root,root)
 %{_scriptdir}
@@ -155,14 +131,9 @@ ln -s %{_scriptdir}/cloud-netconfig-cleanup %{buildroot}/%{_sysconfdir}/sysconfi
 %endif
 %{_udevrulesdir}/*
 %{_unitdir}/*
+/usr/lib/NetworkManager
 %doc README.md
 %license LICENSE
-%endif
-
-%if %{build_nm_pkg} == 1
-%files -n %{base_name}-nm
-/usr/lib/NetworkManager/dispatcher.d
-%endif
 
 %pre
 %service_add_pre %{base_name}.service %{base_name}.timer
