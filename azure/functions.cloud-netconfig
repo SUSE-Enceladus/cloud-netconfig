@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright (c) 2017 SUSE Linux GmbH
+# Copyright (c) 2017-2024 SUSE Linux GmbH
 #
 # This file is part of cloud-netconfig.
 #
@@ -19,8 +19,8 @@
 METADATA_BASE_URL="http://169.254.169.254/metadata/instance/network/interface/"
 URL_HDR="Metadata:true"
 URL_APX='?format=text&api-version=2017-04-02'
-CURL="curl -m 3 --noproxy 169.254.169.254 -H $URL_HDR"
-
+CURL="curl -m 3 --noproxy 169.254.169.254 --no-progress-meter -H $URL_HDR"
+LOG_CURL="logger -t cloud-netconfig -e"
 
 # -------------------------------------------------------------------
 # look up a meta data item
@@ -28,19 +28,30 @@ CURL="curl -m 3 --noproxy 169.254.169.254 -H $URL_HDR"
 get_from_metadata()
 {
     local url="${METADATA_BASE_URL}${1}${URL_APX}"
-    local result=$($CURL $url 2>/dev/null)
-    local count=0
+    local count=0 result response_file
+    response_file=$(mktemp /tmp/cn-response.XXXXXX) || return 1
+    result=$($CURL -D $response_file $url 2> >($LOG_CURL)) || return 1
 
     while [[ $result == "Too many requests" ]]; do
         count=$((count+1))
         if [[ $count -gt 10 ]]; then
-            return
+            return 1
         fi
         sleep 0.5
-        result=$($CURL $url | tr -d ' \n' 2>/dev/null)
+        result=$($CURL -D $response_file $url 2> >($LOG_CURL)) || return 1
     done
 
-    echo -n $result
+    local http_ver http_code text
+    read http_ver http_code text < $response_file
+    rm $response_file
+    if [[ $http_code == 200 ]]; then
+        echo -n $result
+        return 0
+    else
+        logger -t cloud-netconfig "Error: metadata server returned $http_code"
+        test -n "$result" && logger -t cloud-netconfig "Response: $result"
+        return 1
+    fi
 }
 
 
@@ -54,6 +65,7 @@ get_iface_mac()
     test -z "$if_idx" && return
 
     get_from_metadata "${if_idx}/macAddress"
+    return $?
 }
 
 # -------------------------------------------------------------------
@@ -62,14 +74,15 @@ get_iface_mac()
 #
 get_ipv4_addresses_by_index()
 {
-    local if_idx="$1" count=0 prefixlen="$2"
+    local if_idx="$1" count=0 prefixlen="$2" indices
     test -z "$if_idx" && return
 
-    for idx in `get_from_metadata "${if_idx}/ipv4/ipAddress"` ; do
+    indices=$(get_from_metadata "${if_idx}/ipv4/ipAddress") || return 1
+    for idx in $indices ; do
         [[ $count -ge 1 ]] && echo -n " "
-        get_from_metadata "${if_idx}/ipv4/ipAddress/${idx}privateIpAddress"
+        get_from_metadata "${if_idx}/ipv4/ipAddress/${idx}privateIpAddress" || return 1
         echo -n "/"
-        get_from_metadata "${if_idx}/ipv4/subnet/0/prefix"
+        get_from_metadata "${if_idx}/ipv4/subnet/0/prefix" || return 1
         count=$((count+1))
     done
 }
@@ -79,14 +92,15 @@ get_ipv4_addresses_by_index()
 #
 get_ipv4_addresses_from_metadata()
 {
-    local idx hwaddr="$1"
+    local idx indices hwaddr="$1"
     test -z "$hwaddr" && return 1
 
     local oldopt=$(shopt -p nocasematch)
     shopt -s nocasematch
-    for idx in $(get_from_metadata) ; do
+    indices=$(get_from_metadata) || return 1
+    for idx in $indices ; do
         if [[ "$(get_iface_mac ${idx%/*})" == "${hwaddr//:/}" ]]; then
-            get_ipv4_addresses_by_index ${idx%/*}
+            get_ipv4_addresses_by_index ${idx%/*} || return 1
         fi
     done
     eval "$oldopt"
