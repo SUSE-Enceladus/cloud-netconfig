@@ -36,22 +36,21 @@ get_from_metadata()
 #
 get_ipv4_addresses_from_metadata()
 {
-    local hwaddr="$1"
+    local iface status mac if_match addr hwaddr="$1"
     test -z "$hwaddr" && return 1
 
-    local nics=$(get_from_metadata)
-    for idx in $nics ; do
-        local mac=$(get_from_metadata "${idx}mac")
-        if [[ $mac == $hwaddr ]]; then
-            local addr=$(get_from_metadata ${idx}ip)
-            if [[ ${addr} == ${addr%/*} ]]; then
-                addr="${addr}/32"
-            fi
-            echo $addr
-            return 0
-        fi
-    done
-    return 1
+    while read -r iface status mac rest ; do
+         if [[ $mac == $hwaddr ]]; then
+             if_match=$iface
+             break
+         fi
+    done < <(ip -br -o -4 link show)
+    if [[ -n $if_match ]]; then
+        ip -br -4 -o addr show dev $if_match | awk '{ print $3 }'
+    else
+        return 1
+    fi
+    return 0
 }
 
 # -------------------------------------------------------------------

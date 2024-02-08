@@ -44,7 +44,7 @@ debug()
 warn()
 {
     test $LOGLEVEL -lt 1 && return
-    logger $LOGGER_OPTS -p warn -t "$*"
+    logger $LOGGER_OPTS -p warn "$*"
 }
 
 # -------------------------------------------------------------------
@@ -414,8 +414,13 @@ configure_interface_ipv4()
 
     # get active and configured addresses
     local laddrs=($(get_ipv4_addresses_from_interface $INTERFACE))
-    local raddrs addr
-    for addr in $(get_ipv4_addresses_from_metadata $HWADDR) ; do
+    local raddrs addr addrs
+    addrs=$(get_ipv4_addresses_from_metadata $HWADDR)
+    if [[ $? -ne 0 ]]; then
+        warn "error getting IPv4 addresses from metadata, aborting configuration of $INTERFACE"
+        return
+    fi
+    for addr in $addrs ; do
         # validate whether element looks like an IPv4 address
         if  [[ $addr =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}/[0-9]{1,2}$ ]]; then
             raddrs+=($addr)
@@ -449,8 +454,10 @@ configure_interface_ipv4()
             log "removing address $addr from interface $INTERFACE"
             ip -4 addr del $addr dev $INTERFACE
 
-            # drop routing policy rule
-            ip -4 rule del from ${addr%/*}
+            # drop routing policy rules, if any
+            ip -4 rule show from ${addr%/*} | while read rule ; do
+                ip -4 rule del from ${addr%/*} prio ${rule%:*}
+            done
 
             # remove from address log
             remove_addr_from_log $INTERFACE $addr
@@ -466,25 +473,29 @@ configure_interface_ipv4()
     done
 
     local ip_ranges=$(get_ipv4_ranges_from_metadata $HWADDR)
-    local local_route
-    for ipr in $ip_ranges; do
-        local_route=$(ip r show $ipr type local table local)
-        if [[ -z $local_route ]]; then
-            debug "No local route for IP range $ipr, creating one"
-            ip -4 r add local $ipr dev $INTERFACE table local
-            add_addr_to_log $INTERFACE $ipr aliases_
-        fi
-    done
-    # check if cloud-netconfig configured IP aliases were removed
-    local cn_ip_ranges=$(get_cn_assigned_addrs $INTERFACE ranges_)
-    if [[ -n $cn_ip_ranges ]]; then
-        for ipr in $cn_ip_ranges ; do
-            if [[ " $ip_ranges " == *" $ipr "* ]]; then
-                debug "IP range $ipr was removed, dropping local route"
-                ip -4 r del local $ipr dev $INTERFACE table local
-                remove_addr_from_log $INTERFACE $ipr ranges_
+    if [[ $? -eq 0 ]]; then
+        local local_route
+        for ipr in $ip_ranges; do
+            local_route=$(ip r show $ipr type local table local)
+            if [[ -z $local_route ]]; then
+                debug "No local route for IP range $ipr, creating one"
+                ip -4 r add local $ipr dev $INTERFACE table local
+                add_addr_to_log $INTERFACE $ipr aliases_
             fi
         done
+        # check if cloud-netconfig configured IP aliases were removed
+        local cn_ip_ranges=$(get_cn_assigned_addrs $INTERFACE ranges_)
+        if [[ -n $cn_ip_ranges ]]; then
+            for ipr in $cn_ip_ranges ; do
+                if [[ " $ip_ranges " == *" $ipr "* ]]; then
+                    debug "IP range $ipr was removed, dropping local route"
+                    ip -4 r del local $ipr dev $INTERFACE table local
+                    remove_addr_from_log $INTERFACE $ipr ranges_
+                fi
+            done
+        fi
+    else
+        warn "error getting IPv4 ranges from metadata, skipping ranges configuration on $INTERFACE"
     fi
 
     # If we have a single NIC configuration, skip routing policies
@@ -525,26 +536,6 @@ configure_interface_ipv4()
     # copy specific routes from the default routing table
     update_routing_tables -4 $INTERFACE $dest_table $gw_table
 
-    # update routing policies so connections from addresses on
-    # secondary interfaces are routed via those
-    # also include IP rangers
-    #local found prio from ip rest
-    #for addr in ${raddrs[@]} $ip_ranges ; do
-    #    found=0
-    #    while read -r prio from ip rest ; do
-    #        if [[ "${addr%/32}" == "$ip" ]]; then
-    #            found=1
-    #            break
-    #        fi
-    #    done < <(ip -4 rule show)
-    #    if [[ $found == 0 ]]; then
-	  #  debug "creating policy rule for src address ${addr%/32}"
-    #        #priority=$(get_free_priority $LOCAL_TABLE 4)
-    #        ip -4 rule add from ${addr%/32} priority $dest_table lookup $dest_table
-    #        #priority=$(get_free_priority $GW_TABLE 4)
-    #        ip -4 rule add from ${addr%/32} priority $gw_table lookup $gw_table
-    #    fi
-    #done
     local all_addrs=()
     for addr in ${raddrs[@]} ; do
         all_addrs+=("${addr%/*}")
@@ -594,28 +585,6 @@ configure_interface_ipv6()
     update_routing_tables -6 $INTERFACE $dest_table $gw_table
     local laddrs=($(get_ipv6_addresses_from_interface $INTERFACE))
     update_routing_policies -6 $INTERFACE $dest_table $gw_table laddrs
-
-    #local addr laddrs=($(get_ipv6_addresses_from_interface $INTERFACE))
-    #local found prio from ip rest
-    #for addr in ${laddrs[@]} ; do
-    #    found=0
-    #    while read -r prio from ip rest ; do
-    #        if [[ "${addr%/*}" == "$ip" ]]; then
-    #            found=1
-    #            break
-    #        fi
-    #    done < <(ip -6 rule show)
-    #    if [[ $found == 0 ]]; then
-    #        priority=$(get_free_priority $RTABLE 6)
-    #        debug "creating policy rule for address ${addr%/*}"
-    #        ip -6 rule add from ${addr%/*} priority $priority table $RTABLE
-    #    fi
-    #done
-
-    ## create main (w/o default) lookup rule, if necessary
-    #if [[ -z "$(ip -6 rule show prio 30399)" ]]; then
-    #    ip -6 rule add from all table main prio 30399 suppress_prefixlength 0
-    #fi
 }
 
 # -------------------------------------------------------------------
