@@ -48,7 +48,7 @@ ExclusiveArch:  do-not-build
 %endif
 
 Name:           %{base_name}%{flavor_suffix}
-Version:        1.12
+Version:        1.13
 Release:        0
 License:        GPL-3.0-or-later
 Summary:        Network configuration scripts for %{csp_string}
@@ -63,8 +63,8 @@ BuildRequires:  NetworkManager
 Requires:       curl
 Requires:       udev
 Provides:       cloud-netconfig
-Provides:       cloud-netconfig-nm
-Obsoletes:      cloud-netconfig-nm
+Provides:       cloud-netconfig-nm = %{version}
+Obsoletes:      cloud-netconfig-nm < %{version}
 Conflicts:      cloud-netconfig
 %if 0%{?suse_version} == 1315
 %{?systemd_requires}
