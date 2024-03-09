@@ -33,9 +33,9 @@ set_metadata_token()
       TOKEN=$($CURL -X PUT "http://169.254.169.254/latest/api/token" \
               -H "X-aws-ec2-metadata-token-ttl-seconds: $TOKEN_TTL" 2>/dev/null)
       # no token, try IPv6
-      test -z "$TOKEN" && TOKEN=$($CURL -X PUT "http://[fd00:ec2::254]/latest/api/token" \
+      if [ -z "$TOKEN" ]; then
+          TOKEN=$($CURL -X PUT "http://[fd00:ec2::254]/latest/api/token" \
               -H "X-aws-ec2-metadata-token-ttl-seconds: $TOKEN_TTL" 2>/dev/null)
-      if [ -n "$TOKEN" ]; then
           METADATA_URL_BASE=${METADATA_URL_BASE6}
           METADATA_URL_IFACE="${METADATA_URL_BASE}/meta-data/network/interfaces/macs"
       fi
