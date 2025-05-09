@@ -362,20 +362,20 @@ update_routing_policies()
 
     # update routing policies so connections from addresses on
     # secondary interfaces are routed via those
-    # also include IP rangers
+    # also include IP ranges
     local found prio from ip rest
     for addr in ${addrs[@]} ; do
         found=0
         while read -r prio from ip rest ; do
-            if [[ "${addr%/32}" == "$ip" ]]; then
+            if [[ "${addr%/*}" == "$ip" ]]; then
                 found=1
                 break
             fi
         done < <(ip $ipv rule show)
         if [[ $found == 0 ]]; then
-            debug "creating policy rule for src address ${addr%/32}"
-            ip $ipv rule add from ${addr%/32} priority $dest_table lookup $dest_table
-            ip $ipv rule add from ${addr%/32} priority $gw_table lookup $gw_table
+            debug "creating policy rule for src address ${addr%/*}"
+            ip $ipv rule add from ${addr%/*} priority $dest_table lookup $dest_table
+            ip $ipv rule add from ${addr%/*} priority $gw_table lookup $gw_table
         fi
     done
 
@@ -557,6 +557,11 @@ configure_interface_ipv6()
     local INTERFACE="$1"
     test -z "$INTERFACE" && return 1
 
+    local HWADDR="$(cat /sys/class/net/${INTERFACE}/address)"
+    if [ -z "$HWADDR" ]; then
+        warn "Could not determine MAC address for $INTERFACE"
+        return 1
+    fi
     local ifindex="$(cat /sys/class/net/${INTERFACE}/ifindex)"
     if [ -z "$ifindex" ]; then
         warn "Could not determine interface index for $INTERFACE"
@@ -580,6 +585,18 @@ configure_interface_ipv6()
                 sleep 1
             fi
         done
+    fi
+
+    # GCE does not advertise default routes on secondary interfaces
+    # but available from metadata
+    if [[ -z $GW ]]; then
+        GW=$(get_ipv6_gateway_from_metadata $HWADDR)
+        if [[ -n $GW ]]; then
+            debug "adding default route via $GW for $INTERFACE table $gw_table"
+            ip -6 route add default via $GW dev "$INTERFACE" metric $((ifindex+20000))
+        else
+            warn "No IPv6 default route for $INTERFACE"
+        fi
     fi
 
     update_routing_tables -6 $INTERFACE $dest_table $gw_table
