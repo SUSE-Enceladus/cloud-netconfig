@@ -73,6 +73,26 @@ get_gateway_from_metadata()
 }
 
 # -------------------------------------------------------------------
+# look up IPv6 gateway information in metadata
+#
+get_ipv6_gateway_from_metadata()
+{
+    local hwaddr="$1"
+    test -z "$hwaddr" && return 1
+
+    local nics=$(get_from_metadata)
+    for idx in $nics ; do
+        local mac=$(get_from_metadata "${idx}mac")
+        debug "checking $mac"
+        if [[ $mac == $hwaddr ]]; then
+            get_from_metadata ${idx}gateway-ipv6
+            return 0
+        fi
+    done
+    return 1
+}
+
+# -------------------------------------------------------------------
 # look up IP range information for interface
 #
 get_ipv4_ranges_from_metadata()

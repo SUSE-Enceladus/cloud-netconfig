@@ -120,6 +120,14 @@ get_gateway_from_metadata()
 }
 
 # -------------------------------------------------------------------
+# dummy, EC2 provides gateway router advertisements
+#
+get_ipv6_gateway_from_metadata()
+{
+    return 0
+}
+
+# -------------------------------------------------------------------
 # check if metadata server is available
 #
 metadata_available()

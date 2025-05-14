@@ -123,6 +123,14 @@ get_gateway_from_metadata()
 }
 
 # -------------------------------------------------------------------
+# dummy, no gateway information in metadata
+#
+get_ipv6_gateway_from_metadata()
+{
+    return 0
+}
+
+# -------------------------------------------------------------------
 # check whether metadata server is available
 # 
 metadata_available()
