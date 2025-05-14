@@ -572,9 +572,10 @@ configure_interface_ipv6()
     local gw_table="$((ifindex+30400))"
 
     # if necessary, create route table with default route for interface
-    if [ -z "$(ip -6 route show default dev $INTERFACE table $RTABLE 2>/dev/null)" ]; then
+    if [ -z "$(ip -6 route show default dev $INTERFACE table $gw_table 2>/dev/null)" ]; then
         # it is possible that we received the DHCP response before the
         # the router advertisement; in that case, we wait up to 10 secs
+        debug "waiting for IPv6 gateway"
         local route via GW rest counter=0
         while [[ $counter -lt 10 ]]; do
             counter=$((counter+1))
@@ -585,17 +586,16 @@ configure_interface_ipv6()
                 sleep 1
             fi
         done
-    fi
-
-    # GCE does not advertise default routes on secondary interfaces
-    # but available from metadata
-    if [[ -z $GW ]]; then
-        GW=$(get_ipv6_gateway_from_metadata $HWADDR)
-        if [[ -n $GW ]]; then
-            debug "adding default route via $GW for $INTERFACE table $gw_table"
-            ip -6 route add default via $GW dev "$INTERFACE" metric $((ifindex+20000))
-        else
-            warn "No IPv6 default route for $INTERFACE"
+        # GCE does not advertise default routes on secondary interfaces
+        # but available from metadata
+        if [[ -z $GW ]]; then
+            GW=$(get_ipv6_gateway_from_metadata $HWADDR)
+            if [[ -n $GW ]]; then
+                debug "adding default route via $GW for $INTERFACE table $gw_table"
+                ip -6 route add default via $GW dev "$INTERFACE" metric $((ifindex+20000))
+            else
+                warn "No IPv6 default route for $INTERFACE"
+            fi
         fi
     fi
 
