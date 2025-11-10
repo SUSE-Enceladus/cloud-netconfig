@@ -11,7 +11,7 @@ Microsoft Azure, and Google Compute Engine. It requires netconfig (package
 If you are installing from source, run as root `make install-ec2`, `make
 install-azure`, or `make install-gce` depending on your platform. Then reload
 the udev rules by running `udevadm control -R`. Afterwards add
-**cloud-netconfig** to the variable **NETCONFIG__MODULES__ORDER** in
+**cloud-netconfig** to the variable **NETCONFIG_MODULES_ORDER** in
 `/etc/sysconfig/network/config` and restart networking (`systemctl restart
 wicked.service` on SUSE Linux Enterprise Server or openSUSE distributions). On
 EC2 and Azure you may want to enable the systemd timer too (see below for
@@ -82,8 +82,8 @@ removed. Addresses added manually by the administrator or by another tool
 that it will not overwrite existing interface configurations. This allows to
 use specific interface configurations. **cloud-netconfig** will still set up
 secondary IP addresses and routing policies. If you do not want that, set the
-variable **CLOUD__NETCONFIG__MANAGE** to **no** in the `ifcfg` file in
+variable **CLOUD_NETCONFIG_MANAGE** to **no** in the `ifcfg` file in
 `/etc/sysconfig/network` to disable it for the associated interface. You can
-also change the default value of **CLOUD__NETCONFIG__MANAGE** in
+also change the default value of **CLOUD_NETCONFIG_MANAGE** in
 `/etc/default/cloud-netconfig`. The default applies to newly created `ifcfg`
 files, not for existing ones.
