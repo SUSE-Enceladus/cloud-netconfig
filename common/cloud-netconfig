@@ -643,7 +643,7 @@ manage_interfaceconfig()
         fi
     elif [ "$netsys" == "NetworkManager" ]; then
         for conf in /usr/etc/default/cloud-netconfig /etc/default/cloud-netconfig ; do
-            test -f $conf && get_variable "CLOUD_NETCONFIG_MANAGE" conf
+            test -f $conf && get_variable "CLOUD_NETCONFIG_MANAGE" $conf
         done
     else
         debug "Unknown network service $netsys. Not handling interface configuration."
