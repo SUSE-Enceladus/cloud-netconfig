@@ -118,7 +118,7 @@ get_wicked_lease_info()
 {
     local iface="$1" cfg="${STATEDIR}/leaseinfo.${iface}.dhcp.ipv4"
     if [ -e "$cfg" ]; then
-        grep -E '^IPADDR|^NETWORK|^NETMASK|^BROADCAST|^GATEWAYS|^ROUTES' $cfg
+        grep -E '^IPADDR|^NETWORK|^NETMASK|^GATEWAYS|^ROUTES' $cfg
     else
         return 1
     fi
@@ -145,16 +145,14 @@ get_nm_lease_info()
 {
     local iface="$1"
     test -z `type -p nmcli` && { warn "nmcli not found, cannot configure interface" ; return 1 ; }
-    local ipaddr network netmask broadcast gateways prefixlen
+    local ipaddr network netmask gateways prefixlen
     ipaddr=`nmcli -f DHCP4 -t d show $iface | grep ':ip_address' | cut -d= -f2 | tr -d ' '`
     netmask=`nmcli -f DHCP4 -t d show $iface | grep ':subnet_mask' | cut -d= -f2 | tr -d ' '`
-    broadcast=`nmcli -f DHCP4 -t d show $iface | grep ':broadcast_address' | cut -d= -f2 | tr -d ' '`
     gateways=`nmcli -f DHCP4 -t d show $iface | grep ':routers' | cut -d= -f2 | tr ',' ' '`
     echo "IPADDR=$ipaddr"
     echo -n "NETWORK="
     calculate_network $ipaddr $netmask
     echo "NETMASK=$netmask"
-    echo "BROADCAST=$broadcast"
     echo "GATEWAYS=($gateways)"
 }
 
@@ -393,7 +391,7 @@ configure_interface_ipv4()
 {
     local INTERFACE="$1"
     test -z "$INTERFACE" && return 1
-    local IPADDR NETWORK NETMASK BROADCAST GATEWAYS
+    local IPADDR NETWORK NETMASK GATEWAYS
     eval `get_lease_info $INTERFACE`
     if [ -z "$IPADDR" ]; then
         warn "Could not determine address from DHCP4 lease info"
@@ -468,7 +466,7 @@ configure_interface_ipv4()
     for addr in ${addr_to_add[@]} ; do
         # add new IP address
         log "adding address $addr to interface $INTERFACE"
-        ip -4 addr add $addr broadcast $BROADCAST dev $INTERFACE
+        ip -4 addr add $addr broadcast + dev $INTERFACE
         add_addr_to_log $INTERFACE $addr
     done
 
