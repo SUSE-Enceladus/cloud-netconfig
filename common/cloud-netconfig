@@ -468,7 +468,7 @@ configure_interface_ipv4()
     for addr in ${addr_to_add[@]} ; do
         # add new IP address
         log "adding address $addr to interface $INTERFACE"
-        ip -4 addr add $addr broadcast $BROADCAST dev $INTERFACE
+        ip -4 addr add $addr broadcast + dev $INTERFACE
         add_addr_to_log $INTERFACE $addr
     done
 
