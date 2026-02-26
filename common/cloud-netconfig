@@ -525,7 +525,7 @@ configure_interface_ipv4()
         fi
         if [[ -n $GW ]]; then
             debug "adding default route via $GW for $INTERFACE table $GW_TABLE"
-            ip -4 route add default via $GW dev "$INTERFACE" metric $((ifindex+20000))
+            ip -4 route add default via $GW dev "$INTERFACE" src $IPADDR metric $((ifindex+24000))
         else
             warn "No default route for $INTERFACE"
         fi
