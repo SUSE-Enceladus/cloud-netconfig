@@ -407,6 +407,7 @@ configure_interface_ipv4()
         warn "Could not determine interface index for $INTERFACE"
         return 1
     fi
+    IPADDR="${IPADDR%/*}"
     local dest_table="$((ifindex+30000))"
     local gw_table="$((ifindex+30400))"
 
@@ -442,7 +443,7 @@ configure_interface_ipv4()
     for addr in ${addr_to_remove[@]} ; do
         # as a safety measure, check against the address received via DHCP and
         # refuse to remove it even if it is not in the meta data
-        if [[ "${addr%/*}" == "${IPADDR%/*}" ]]; then
+        if [[ "${addr%/*}" == "${IPADDR}" ]]; then
             debug "not removing DHCP IP address from interface"
             continue
         fi
@@ -524,7 +525,7 @@ configure_interface_ipv4()
             fi
         fi
         if [[ -n $GW ]]; then
-            debug "adding default route via $GW for $INTERFACE table $GW_TABLE"
+            debug "adding default route via $GW for $INTERFACE src $IPADDR table $GW_TABLE"
             ip -4 route add default via $GW dev "$INTERFACE" src $IPADDR metric $((ifindex+24000))
         else
             warn "No default route for $INTERFACE"
