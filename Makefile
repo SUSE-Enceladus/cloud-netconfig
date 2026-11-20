@@ -1,4 +1,4 @@
-.PHONY: common help install-azure install-ec2
+.PHONY: common help install-azure install-ec2 test
 PREFIX?=/usr
 SYSCONFDIR?=/etc
 DISTCONFDIR?=/usr/etc
@@ -73,6 +73,9 @@ install-netconfig-wrapper:
 	mkdir -p $(DESTDIR)$(NETCONFIGDIR)
 	install -m 755 common/cloud-netconfig-wrapper $(DESTDIR)$(NETCONFIGDIR)/cloud-netconfig
 	sed -i -r -e "s;SCRIPTDIR=.*;SCRIPTDIR=${SCRIPTDIR};g" $(DESTDIR)$(NETCONFIGDIR)/cloud-netconfig
+
+test:
+	@bash tests/test_azure_imds.sh
 
 tarball:
 	@test -n "$(verSrc)"

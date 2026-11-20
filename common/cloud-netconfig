@@ -428,6 +428,27 @@ configure_interface_ipv4()
         fi
     done
 
+    # Keep-last-good-state safety check:
+    # An active DHCP-configured interface in a cloud framework always has at least one
+    # IPv4 address, and that list must contain the primary IP assigned by DHCP.
+    # An empty or incomplete metadata response must NEVER trigger address deletion.
+    if [[ ${#raddrs[@]} -eq 0 ]]; then
+        warn "No valid IPv4 addresses found in metadata for $INTERFACE, retaining existing configuration"
+        return
+    fi
+
+    local has_primary=0
+    for addr in ${raddrs[@]} ; do
+        if [[ "${addr%/*}" == "$IPADDR" ]]; then
+            has_primary=1
+            break
+        fi
+    done
+    if [[ $has_primary -eq 0 ]]; then
+        warn "Instance metadata for $INTERFACE does not contain primary DHCP IP $IPADDR, retaining existing configuration"
+        return
+    fi
+
     # get differences
     local addr_to_remove=($(get_extra_elements laddrs[@] raddrs[@]))
     local addr_to_add=($(get_extra_elements raddrs[@] laddrs[@]))

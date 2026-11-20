@@ -28,30 +28,49 @@ LOG_CURL="logger -t cloud-netconfig -e"
 get_from_metadata()
 {
     local url="${METADATA_BASE_URL}${1}${URL_APX}"
-    local count=0 result response_file
-    response_file=$(mktemp /tmp/cn-response.XXXXXX) || return 1
-    result=$($CURL -D $response_file $url 2> >($LOG_CURL)) || return 1
+    local count=0 max_retries=${METADATA_MAX_RETRIES:-3} delay=${METADATA_RETRY_DELAY:-1} result http_code="" response_file
 
-    while [[ $result == "Too many requests" ]]; do
+    response_file=$(mktemp /tmp/cn-response.XXXXXX) || return 1
+
+    while true ; do
+        http_code=""
+        if result=$($CURL -D $response_file "$url" 2> >($LOG_CURL)); then
+            if [[ -s "$response_file" ]]; then
+                http_code=$(awk '/^HTTP/ { code=$2 } END { print code }' "$response_file")
+            fi
+            if [[ "$http_code" == "200" ]]; then
+                rm -f "$response_file"
+                echo -n "$result"
+                return 0
+            fi
+        fi
+
         count=$((count+1))
-        if [[ $count -gt 10 ]]; then
+        if [[ $count -gt $max_retries ]]; then
+            break
+        fi
+
+        # Check if error is non-retriable: client error 4xx other than 429
+        if [[ -n "$http_code" && "$http_code" =~ ^4[0-9]{2}$ && "$http_code" != "429" && "$result" != *"Too many requests"* ]]; then
+            logger -t cloud-netconfig "Error: metadata server returned non-retriable status $http_code"
+            test -n "$result" && logger -t cloud-netconfig "Response: $result"
+            rm -f "$response_file"
             return 1
         fi
-        sleep 0.5
-        result=$($CURL -D $response_file $url 2> >($LOG_CURL)) || return 1
+
+        logger -t cloud-netconfig "Warning: metadata request to $url failed (HTTP: ${http_code:-curl error}), retrying in ${delay}s (attempt $count of $max_retries)..."
+        sleep "$delay"
+        delay=$((delay * 2))
     done
 
-    local http_ver http_code text
-    read http_ver http_code text < $response_file
-    rm $response_file
-    if [[ $http_code == 200 ]]; then
-        echo -n $result
-        return 0
-    else
-        logger -t cloud-netconfig "Error: metadata server returned $http_code"
+    rm -f "$response_file"
+    if [[ -n "$http_code" ]]; then
+        logger -t cloud-netconfig "Error: metadata server returned $http_code after $max_retries retries"
         test -n "$result" && logger -t cloud-netconfig "Response: $result"
-        return 1
+    else
+        logger -t cloud-netconfig "Error: metadata request to $url failed after $max_retries retries"
     fi
+    return 1
 }
 
 
@@ -62,7 +81,7 @@ get_from_metadata()
 get_iface_mac()
 {
     local if_idx="$1"
-    test -z "$if_idx" && return
+    test -z "$if_idx" && return 1
 
     get_from_metadata "${if_idx}/macAddress"
     return $?
@@ -74,17 +93,23 @@ get_iface_mac()
 #
 get_ipv4_addresses_by_index()
 {
-    local if_idx="$1" count=0 prefixlen="$2" indices
-    test -z "$if_idx" && return
+    local if_idx="$1" prefixlen="${2:-}" indices ip prefix
+    test -z "$if_idx" && return 1
 
     indices=$(get_from_metadata "${if_idx}/ipv4/ipAddress") || return 1
+    test -z "$indices" && return 1
+
+    local addrs_found=()
     for idx in $indices ; do
-        [[ $count -ge 1 ]] && echo -n " "
-        get_from_metadata "${if_idx}/ipv4/ipAddress/${idx}privateIpAddress" || return 1
-        echo -n "/"
-        get_from_metadata "${if_idx}/ipv4/subnet/0/prefix" || return 1
-        count=$((count+1))
+        ip=$(get_from_metadata "${if_idx}/ipv4/ipAddress/${idx}privateIpAddress") || return 1
+        prefix=$(get_from_metadata "${if_idx}/ipv4/subnet/0/prefix") || return 1
+        test -z "$ip" -o -z "$prefix" && return 1
+        addrs_found+=("${ip}/${prefix}")
     done
+
+    test ${#addrs_found[@]} -eq 0 && return 1
+    echo -n "${addrs_found[*]}"
+    return 0
 }
 
 # -------------------------------------------------------------------
@@ -92,18 +117,30 @@ get_ipv4_addresses_by_index()
 #
 get_ipv4_addresses_from_metadata()
 {
-    local idx indices hwaddr="$1"
+    local idx indices mac hwaddr="$1" iface_found=0
     test -z "$hwaddr" && return 1
 
     local oldopt=$(shopt -p nocasematch)
     shopt -s nocasematch
-    indices=$(get_from_metadata) || return 1
+    indices=$(get_from_metadata) || { eval "$oldopt"; return 1; }
+    test -z "$indices" && { eval "$oldopt"; return 1; }
+
     for idx in $indices ; do
-        if [[ "$(get_iface_mac ${idx%/*})" == "${hwaddr//:/}" ]]; then
-            get_ipv4_addresses_by_index ${idx%/*} || return 1
+        mac=$(get_iface_mac ${idx%/*}) || { eval "$oldopt"; return 1; }
+        if [[ "$mac" == "${hwaddr//:/}" ]]; then
+            iface_found=1
+            get_ipv4_addresses_by_index ${idx%/*}
+            local ret=$?
+            eval "$oldopt"
+            return $ret
         fi
     done
     eval "$oldopt"
+
+    if [[ $iface_found -eq 0 ]]; then
+        logger -t cloud-netconfig "Warning: interface with MAC $hwaddr not found in metadata"
+        return 1
+    fi
 }
 
 # -------------------------------------------------------------------
@@ -135,8 +172,15 @@ get_ipv6_gateway_from_metadata()
 # 
 metadata_available()
 {
-    local resp=$($CURL "http://169.254.169.254/metadata/instance/${URL_APX}" 2>/dev/null)
-    [[ "$resp" == *network/* ]]
-    return $?
+    local resp retries=0 delay=${METADATA_RETRY_DELAY:-1}
+    while [[ $retries -lt 3 ]]; do
+        resp=$($CURL "http://169.254.169.254/metadata/instance/${URL_APX}" 2>/dev/null)
+        if [[ "$resp" == *network/* ]]; then
+            return 0
+        fi
+        retries=$((retries+1))
+        sleep "$delay"
+    done
+    return 1
 }
 
