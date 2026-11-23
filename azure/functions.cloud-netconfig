@@ -95,13 +95,13 @@ get_ipv4_addresses_from_metadata()
     local idx indices hwaddr="$1"
     test -z "$hwaddr" && return 1
 
+    indices=$(get_from_metadata) || return 1
     local oldopt=$(shopt -p nocasematch)
     shopt -s nocasematch
-    indices=$(get_from_metadata) || return 1
     for idx in $indices ; do
-        mac=$(get_iface_mac ${idx%/*}) || return 1
+        mac=$(get_iface_mac ${idx%/*}) || { eval "$oldopt"; return 1 ; }
         if [[ "${mac}" == "${hwaddr//:/}" ]]; then
-            get_ipv4_addresses_by_index ${idx%/*} || return 1
+            get_ipv4_addresses_by_index ${idx%/*} || { eval "$oldopt" ; return 1 ; }
         fi
     done
     eval "$oldopt"
