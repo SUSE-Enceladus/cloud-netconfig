@@ -415,7 +415,7 @@ configure_interface_ipv4()
     local laddrs=($(get_ipv4_addresses_from_interface $INTERFACE))
     local raddrs addr addrs
     addrs=$(get_ipv4_addresses_from_metadata $HWADDR)
-    if [[ $? -ne 0 ]]; then
+    if [[ $? -ne 0 -o -z "$addr" ]]; then
         warn "error getting IPv4 addresses from metadata, aborting configuration of $INTERFACE"
         return
     fi
